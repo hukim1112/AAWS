@@ -111,6 +111,11 @@ if __name__ == "__main__":
                         if 'input' in chunk:
                              print(f" Input: {chunk['input']}", end="")
                         print("\n", end="")
+                    elif chunk["type"] == "tool_end":
+                        print(f"✅ [{chunk['name']}] 완료", end="")
+                        if 'output' in chunk:
+                            print(f" → {chunk['output'][:100]}", end="")
+                        print()
                     elif chunk["type"] == "error":
                         print(f"\n❌ Error: {chunk.get('content') or chunk.get('error')}")
                 elif "error" in chunk:
