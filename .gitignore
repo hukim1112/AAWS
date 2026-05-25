@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Environment
+.env
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+desktop.ini
+.DS_Store
+Thumbs.db
+
+# Agent runtime outputs (test results, generated code, cost logs)
+artifacts/results/
+artifacts/code/
+agent_cost_log.json
+
+# Misc
+*.log
+.gemini/
+my_quotes_profile/
