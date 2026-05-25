@@ -6,10 +6,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from app.schemas import SeniorCoderContext
 from app.prompts import CODER_SYSTEM_PROMPT
-from app.tools import (
-    read_code_file, edit_code_file, create_new_file, write_text_file,
-    run_python_script, validate_collected_data, ARTIFACT_DIR
-)
+from app.tools import tools_coder, ARTIFACT_DIR
 
 def create_coder_agent(model_name: str = "google_genai:gemini-flash-latest", temperature: float = 0.2):
     """데이터 청사진을 코드로 제작/수행하는 Coder 에이전트 생성"""
@@ -31,7 +28,7 @@ def create_coder_agent(model_name: str = "google_genai:gemini-flash-latest", tem
         model=model,
         system_prompt=CODER_SYSTEM_PROMPT,
         context_schema=SeniorCoderContext,
-        tools=[read_code_file, edit_code_file, create_new_file, write_text_file, run_python_script, validate_collected_data],
+        tools=tools_coder,
         checkpointer=checkpointer,
         middleware=middleware
     )

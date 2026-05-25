@@ -25,7 +25,7 @@ def read_image_and_analyze(image_path: str, query_hint: str = "이 이미지의 
         with open(image_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
 
-        vision_llm = ChatOpenAI(model="gpt-4o", temperature=0)
+        vision_llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
 
         messages = [
             HumanMessage(
@@ -49,7 +49,8 @@ def read_image_and_analyze(image_path: str, query_hint: str = "이 이미지의 
 try:
     from langchain_tavily import TavilySearch
     tavily_search = TavilySearch(max_results=5, topic="general", search_depth="advanced", include_raw_content=True)
-except ImportError:
+except Exception:
+    # TAVILY_API_KEY가 없거나 라이브러리가 없으면 None으로 대체
     tavily_search = None
 
 @tool

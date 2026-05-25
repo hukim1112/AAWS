@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import json
 
@@ -30,8 +30,8 @@ from app.agents import create_navigator_agent, create_coder_agent
 from app.schemas import NavigatorContext, SeniorCoderContext
 from app.prompts import SUPERVISOR_SYSTEM_PROMPT
 
-# 추가 유틸리티 툴스 (src.tools 로 이관됨)
-from app.tools import read_image_and_analyze, web_search_custom_tool
+# 추가 유틸리티 툴스 (Tool Factory)
+from app.tools import tools_supervisor
 
 from browser_use import Agent, Browser, ChatGoogle
 
@@ -128,7 +128,7 @@ supervisor_checkpointer = InMemorySaver()
 supervisor_agent = create_agent(
     model=supervisor_model,
     system_prompt=SUPERVISOR_SYSTEM_PROMPT,
-    tools=[chat_to_navigator, chat_to_coder, read_image_and_analyze, web_search_custom_tool],
+    tools=[chat_to_navigator, chat_to_coder] + tools_supervisor,
     checkpointer=supervisor_checkpointer,
     name="supervisor_agent"
 )

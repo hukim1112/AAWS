@@ -60,13 +60,9 @@ class AgentClient:
 if __name__ == "__main__":
     client = AgentClient()
     
-    # agents 폴더에서 사용 가능한 모듈을 동적으로 로드
-    agents_dir = os.path.join(os.path.dirname(__file__), "agents")
-    available_agents = []
-    if os.path.exists(agents_dir):
-        for f in os.listdir(agents_dir):
-            if f.endswith(".py") and f != "__init__.py":
-                available_agents.append(f[:-3])  # .py 제거
+    # AGENT_REGISTRY에서 사용 가능한 에이전트 목록을 동적으로 로드
+    from app.agents import AGENT_REGISTRY
+    available_agents = [a["name"] for a in AGENT_REGISTRY]
 
     print("="*50)
     print("🤖 Agent Client Console")

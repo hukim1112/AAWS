@@ -38,6 +38,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 import importlib
+from app.agents import AGENT_REGISTRY
+from app.utils.message_utils import sanitize_text, normalize_content
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO)
@@ -77,7 +79,15 @@ def create_agent_router(agent_executor, prefix: str, tags: list = None) -> APIRo
                 
                 # Tool Start
                 if kind == "on_tool_start":
-                    yield f"data: {json.dumps({'type': 'tool_start', 'name': event['name'], 'input': event['data'].get('input')})}\n\n"
+                    tool_input = sanitize_text(str(event['data'].get('input', '')))
+                    yield f"data: {json.dumps({'type': 'tool_start', 'name': event['name'], 'input': tool_input})}\n\n"
+                
+                # Tool End (결과도 함께 전송)
+                elif kind == "on_tool_end":
+                    tool_output = str(event["data"].get("output", ""))
+                    # 긴 출력은 앞부분만 전송 (UI 과부하 방지)
+                    truncated = tool_output[:500] + "..." if len(tool_output) > 500 else tool_output
+                    yield f"data: {json.dumps({'type': 'tool_end', 'name': event['name'], 'output': sanitize_text(truncated)})}\n\n"
                 
                 # Token Streaming (Chat Model)
                 elif kind == "on_chat_model_stream":
@@ -88,15 +98,9 @@ def create_agent_router(agent_executor, prefix: str, tags: list = None) -> APIRo
 
                     chunk = event["data"]["chunk"]
                     if chunk and chunk.content:
-                        # [Gemini 리스트 출력 방어 파서]
-                        raw_content = chunk.content
-                        if isinstance(raw_content, list):
-                            content_str = "".join([c.get("text", "") if isinstance(c, dict) else str(c) for c in raw_content])
-                        else:
-                            content_str = str(raw_content)
-
-                        if content_str:
-                            yield f"data: {json.dumps({'type': 'token', 'content': content_str})}\n\n"
+                        normalized = sanitize_text(normalize_content(chunk.content))
+                        if normalized:
+                            yield f"data: {json.dumps({'type': 'token', 'content': normalized})}\n\n"
 
         except Exception as e:
             logger.error(f"Stream error in {prefix}: {e}")
@@ -116,15 +120,8 @@ def create_agent_router(agent_executor, prefix: str, tags: list = None) -> APIRo
             )
             # LangGraph: State['messages'][-1] is the AI response
             last_message = result["messages"][-1]
-            
-            # [Gemini 리스트 출력 방어 파서]
-            raw_content = last_message.content
-            if isinstance(raw_content, list):
-                content_str = "".join([c.get("text", "") if isinstance(c, dict) else str(c) for c in raw_content])
-            else:
-                content_str = str(raw_content)
-                
-            return ChatMessage(type="ai", content=content_str)
+            normalized = sanitize_text(normalize_content(last_message.content))
+            return ChatMessage(type="ai", content=normalized)
         except Exception as e:
             logger.error(f"Invocation error in {prefix}: {e}")
             traceback.print_exc()
@@ -146,38 +143,32 @@ app = FastAPI(
     description="Unified Server for Multiple Agents"
 )
 
-# --- Dynamic Agent Loading & Router Registration ---
+# --- Dynamic Agent Registration (Registry 패턴) ---
 loaded_agents = []
-agents_dir = os.path.join(project_root, "app", "agents")
-
-if os.path.exists(agents_dir):
-    for filename in os.listdir(agents_dir):
-        if filename.endswith(".py") and filename != "__init__.py":
-            agent_name = filename[:-3]
-            module_path = f"app.agents.{agent_name}"
-            
-            try:
-                # 동적으로 모듈 임포트
-                module = importlib.import_module(module_path)
+for agent_config in AGENT_REGISTRY:
+    try:
+        # 동적으로 모듈 임포트
+        module = importlib.import_module(agent_config["module"])
+        
+        # 에이전트 실행기(executor) 객체 찾기
+        executor = getattr(module, "agent_executor", None)
+        if not executor:
+            # create_agent_name 팩토리 함수인 경우 대응
+            executor_factory = getattr(module, f"create_{agent_config['name']}_agent", None)
+            if executor_factory:
+                executor = executor_factory()
                 
-                # 에이전트 실행기(executor) 객체 찾기
-                # 관례상 agent_executor 이름 권장. 없으면 모듈명_agent 확인
-                executor = getattr(module, "agent_executor", None)
-                if not executor:
-                    executor = getattr(module, f"{agent_name}_agent", None)
-                    
-                if executor:
-                    logger.info(f"✅ Loaded agent: {agent_name} from {module_path}")
-                    tag_name = agent_name.replace("_", " ").title()
-                    app.include_router(
-                        create_agent_router(executor, f"/{agent_name}", [tag_name])
-                    )
-                    loaded_agents.append(agent_name)
-                else:
-                    logger.info(f"⚠️ Skip: {module_path} 모듈에는 'agent_executor'가 없어 라우터 매핑을 생략합니다.")
-            except Exception as e:
-                logger.error(f"❌ Failed to load agent {agent_name}: {e}")
-                traceback.print_exc()
+        if executor:
+            app.include_router(
+                create_agent_router(executor, agent_config["prefix"], agent_config["tags"])
+            )
+            loaded_agents.append(agent_config["name"])
+            logger.info(f"✅ Registered agent: {agent_config['name']} at {agent_config['prefix']}")
+        else:
+            logger.warning(f"⚠️ Warning: '{agent_config['name']}' 모듈에 'agent_executor'가 없습니다.")
+    except Exception as e:
+        logger.error(f"❌ Failed to load agent '{agent_config['name']}': {e}")
+        traceback.print_exc()
 
 @app.get("/health")
 def health():

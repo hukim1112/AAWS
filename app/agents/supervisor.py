@@ -19,8 +19,8 @@ from app.agents.navigator import create_navigator_agent
 from app.agents.coder import create_coder_agent
 from app.schemas import NavigatorContext, SeniorCoderContext
 
-# 추가 유틸리티 툴스
-from app.tools.supervisor_tools import read_image_and_analyze, web_search_custom_tool
+# 추가 유틸리티 툴스 (Tool Factory)
+from app.tools import tools_supervisor
 
 # 서빙용 프롬프트
 from app.prompts import SUPERVISOR_SYSTEM_PROMPT
@@ -63,11 +63,15 @@ async def chat_to_navigator(request: str, runtime: ToolRuntime, config: Runnable
     ctx = NavigatorContext(shared_browser=browser_instance, response_mode=mode)
     
     try:
-        current_thread_id = config.get("configurable", {}).get("thread_id", "default_thread")
+        # FastAPI/UI로 이벤트를 전달하기 위해 원본 config(callbacks 포함)를 그대로 전달해야 합니다.
+        inner_config = config.copy() if config else {}
+        inner_config["configurable"] = inner_config.get("configurable", {}).copy()
+        inner_config["configurable"]["thread_id"] = config.get("configurable", {}).get("thread_id", "default_thread")
+        
         result = await GLOBAL_NAVIGATOR_AGENT.ainvoke(
             {"messages": [("user", prompt)]},
             context=ctx,
-            config={"configurable": {"thread_id": current_thread_id}}
+            config=inner_config
         )
         return result["messages"][-1].content
     finally:
@@ -91,11 +95,14 @@ async def chat_to_coder(task_description: str, runtime: ToolRuntime, config: Run
         
     print(f"\n👨‍💼 [Supervisor] Coder와 대화 중...")
     
-    current_thread_id = config.get("configurable", {}).get("thread_id", "default_thread")
+    inner_config = config.copy() if config else {}
+    inner_config["configurable"] = inner_config.get("configurable", {}).copy()
+    inner_config["configurable"]["thread_id"] = config.get("configurable", {}).get("thread_id", "default_thread")
+    
     result = await GLOBAL_CODER_AGENT.ainvoke(
         {"messages": [("user", prompt)]},
         context=SeniorCoderContext(),
-        config={"configurable": {"thread_id": current_thread_id}}
+        config=inner_config
     )
     return result["messages"][-1].content
 
@@ -104,13 +111,13 @@ async def chat_to_coder(task_description: str, runtime: ToolRuntime, config: Run
 # 3. Supervisor Agent 구성
 # =========================================================
 
-supervisor_model = init_chat_model("google_genai:gemini-flash-latest", temperature=0.1)
+supervisor_model = init_chat_model("google_genai:gemini-2.5-pro", temperature=0.1)
 supervisor_checkpointer = InMemorySaver()
 
 supervisor_agent = create_agent(
     model=supervisor_model,
     system_prompt=SUPERVISOR_SYSTEM_PROMPT,
-    tools=[chat_to_navigator, chat_to_coder, read_image_and_analyze, web_search_custom_tool],
+    tools=[chat_to_navigator, chat_to_coder] + tools_supervisor,
     checkpointer=supervisor_checkpointer,
     name="supervisor_agent"
 )
