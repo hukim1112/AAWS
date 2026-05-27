@@ -14,6 +14,25 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
+
+def extract_text_content(content) -> str:
+    """AIMessage.content에서 순수 텍스트만 추출합니다.
+    
+    Gemini는 .content를 list[dict|str] 형태(서명 블록 포함)로 반환할 수 있고,
+    다른 모델은 plain str을 반환합니다. 이 함수는 두 경우 모두 처리합니다.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict):
+                text_parts.append(part.get('text', ''))
+            elif isinstance(part, str):
+                text_parts.append(part)
+        return ''.join(text_parts)
+    return str(content)
+
 # Project Root Setup
 project_root = os.getenv("PROJECT_ROOT", os.getcwd())
 if not os.path.exists(os.path.join(project_root, "workflows")):
@@ -82,7 +101,10 @@ async def chat_to_navigator(request: str, runtime: ToolRuntime, config: Runnable
             context=ctx,
             config=inner_config
         )
-        return result["messages"][-1].content
+        return_content = extract_text_content(result["messages"][-1].content)
+        print(f"\n🔍 [DEBUG] chat_to_navigator 반환값 길이: {len(return_content)}자")
+        print(f"🔍 [DEBUG] chat_to_navigator 반환값 시작 200자: {return_content[:200]}")
+        return return_content
     finally:
         if browser_instance:
             await browser_instance.stop()
@@ -113,7 +135,11 @@ async def chat_to_coder(task_description: str, runtime: ToolRuntime, config: Run
         context=SeniorCoderContext(),
         config=inner_config
     )
-    return result["messages"][-1].content
+    return_content = extract_text_content(result["messages"][-1].content)
+    print(f"\n🔍 [DEBUG] chat_to_coder 반환값 길이: {len(return_content)}자")
+    print(f"🔍 [DEBUG] chat_to_coder 반환값 시작 200자: {return_content[:200]}")
+    print(f"🔍 [DEBUG] chat_to_coder 반환값 끝 200자: ...{return_content[-200:]}")
+    return return_content
 
 
 # =========================================================
