@@ -11,7 +11,7 @@
 
 | 미션 | 주제 | 핵심 키워드 | 예상 소요 |
 |:---:|:---|:---|:---:|
-| **Mission 1** | 시나리오 도전 & 프롬프트 튜닝 | Prompt Engineering, Evaluation | ~1h |
+| **Mission 1** | 시나리오 도전 & 프롬프트 튜닝 | Prompt Engineering, Evaluation | ~2h |
 | **Mission 2** | Analyst 에이전트 구축 | 새 에이전트 설계, 도구 제작, 시각화 | ~2h |
 | **Mission 3** | 에이전트 고도화 (선택 미션) | Pattern Memory, Model Fallback, Skills | ~1h |
 
@@ -93,7 +93,7 @@ Mission 1에서 수집한 데이터를 **분석하고 시각화하는 Analyst �
 
 Analyst는 수집된 데이터(JSON/CSV)를 읽고, 의미 있는 패턴을 발견하고, 시각적으로 전달하는 에이전트입니다. 먼저 이 에이전트에게 **어떤 도구가 필요한지** 설계해보세요.
 
-> **💡 도구 설계 힌트 (자유롭게 변형/추가 가능):**
+> **💡 도구 설계 예시 (자유롭게 변형/추가 가능):**
 >
 > | 도구 이름 | 역할 | 입력 | 출력 | 난이도 |
 > |:---|:---|:---|:---|:---:|
@@ -105,154 +105,7 @@ Analyst는 수집된 데이터(JSON/CSV)를 읽고, 의미 있는 패턴을 발�
 
 #### Step 2. 도구 코드 구현
 
-`app/tools/` 폴더에 `analyst.py`를 생성하고 도구를 구현하세요. 아래에 주요 뼈대 코드를 제공합니다.
-
-**📊 데이터 로드 & 분석 도구:**
-```python
-# app/tools/analyst.py
-import os
-import json
-from langchain.tools import tool
-from .common import ARTIFACT_DIR
-
-@tool(parse_docstring=True)
-def load_json_data(filepath: str) -> str:
-    """수집된 JSON 데이터를 로드하고, 데이터의 구조·통계·품질을 프로파일링합니다.
-    
-    Args:
-        filepath: 분석할 JSON 파일 경로
-    """
-    import pandas as pd
-    
-    full_path = os.path.join(ARTIFACT_DIR, os.path.basename(filepath))
-    with open(full_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    df = pd.DataFrame(data)
-    
-    report = f"📊 데이터 프로파일링 결과\n{'='*40}\n"
-    report += f"총 {len(df)}건, {len(df.columns)}개 컬럼\n\n"
-    
-    # 컬럼별 타입과 결측치 분석
-    report += "📋 컬럼 상세:\n"
-    for col in df.columns:
-        dtype = str(df[col].dtype)
-        null_count = df[col].isnull().sum()
-        unique_count = df[col].nunique()
-        report += f"  - {col} ({dtype}): 고유값 {unique_count}개, 결측 {null_count}건\n"
-    
-    # 숫자형 컬럼이 있으면 기술 통계
-    numeric_cols = df.select_dtypes(include='number').columns.tolist()
-    if numeric_cols:
-        report += f"\n📈 수치 통계:\n{df[numeric_cols].describe().to_string()}\n"
-    
-    # 텍스트 컬럼의 빈도 분석 (상위 5개)
-    text_cols = df.select_dtypes(include='object').columns.tolist()
-    for col in text_cols[:3]:
-        top5 = df[col].value_counts().head(5)
-        report += f"\n🏷️ '{col}' 빈도 Top 5:\n{top5.to_string()}\n"
-    
-    report += f"\n📝 샘플 데이터 (상위 3건):\n{df.head(3).to_string()}"
-    return report
-
-@tool(parse_docstring=True)
-def run_analysis_code(code: str) -> str:
-    """pandas, numpy 등을 활용한 데이터 분석 코드를 실행하고 결과를 반환합니다.
-    코드 내에서 print()로 출력한 내용이 결과로 반환됩니다.
-    
-    Args:
-        code: 실행할 파이썬 분석 코드 문자열
-    """
-    import io, sys
-    
-    old_stdout = sys.stdout
-    sys.stdout = buffer = io.StringIO()
-    
-    try:
-        exec(code, {"__builtins__": __builtins__})
-        output = buffer.getvalue()
-        return output if output.strip() else "[실행 완료] 표준 출력 없음"
-    except Exception as e:
-        return f"[Error] 분석 코드 실행 실패: {e}"
-    finally:
-        sys.stdout = old_stdout
-```
-
-**📈 차트 생성 도구:**
-```python
-@tool(parse_docstring=True)
-def create_chart(chart_code: str, filename: str = "chart.png") -> str:
-    """matplotlib/seaborn 코드를 실행하여 차트를 이미지로 저장합니다.
-    코드 내에서 plt.savefig()를 호출하지 마세요 — 자동으로 처리됩니다.
-    
-    Args:
-        chart_code: 차트를 생성하는 파이썬 코드 (plt.show() 대신 이 도구가 저장 처리)
-        filename: 저장할 이미지 파일명 (예: author_frequency.png)
-    """
-    import matplotlib
-    matplotlib.use('Agg')  # 비GUI 백엔드
-    import matplotlib.pyplot as plt
-    
-    save_path = os.path.join(ARTIFACT_DIR, filename)
-    
-    try:
-        exec(chart_code, {"__builtins__": __builtins__})
-        plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close('all')
-        return f"[Success] 차트 저장 완료: {filename}"
-    except Exception as e:
-        plt.close('all')
-        return f"[Error] 차트 생성 실패: {e}"
-```
-
-**🍌 Nano Banana — AI 인포그래픽 생성 도구 (보너스!):**
-
-Gemini의 이미지 생성 기능을 활용하면, 단순한 matplotlib 차트를 넘어 **AI가 그린 인포그래픽**을 만들 수 있습니다.
-(`samples/nano_banana_image_gen.py`에 전체 샘플 코드가 준비되어 있습니다)
-
-```python
-@tool(parse_docstring=True)
-def generate_infographic(prompt: str, filename: str = "infographic.png") -> str:
-    """Gemini 이미지 생성(Nano Banana)을 사용하여 데이터 분석 결과를 
-    시각적으로 매력적인 AI 인포그래픽으로 변환합니다.
-    
-    Args:
-        prompt: 생성할 인포그래픽을 설명하는 상세 프롬프트
-        filename: 저장할 이미지 파일명
-    """
-    from google import genai
-    from google.genai import types
-    from PIL import Image
-    from io import BytesIO
-    
-    client = genai.Client(
-        api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    )
-    save_path = os.path.join(ARTIFACT_DIR, filename)
-    
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.1-flash-image-preview",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"],
-            ),
-        )
-        for part in response.candidates[0].content.parts:
-            if part.inline_data and part.inline_data.mime_type.startswith("image/"):
-                image = Image.open(BytesIO(part.inline_data.data))
-                image.save(save_path)
-                return f"[Success] AI 인포그래픽 생성 완료: {filename}"
-        return "[Warning] 이미지 생성 응답이 없습니다."
-    except Exception as e:
-        return f"[Error] 인포그래픽 생성 실패: {e}"
-```
-
-> **💡 활용 예시:** Analyst가 데이터를 분석한 후, 핵심 인사이트를 요약하여
-> `generate_infographic("Top 5 인용구 저자의 빈도를 보여주는 귀여운 인포그래픽. Albert Einstein이 1위이고...")` 
-> 처럼 호출하면, AI가 시각적으로 아름다운 인포그래픽을 그려줍니다!
-
-**그리고 `app/tools/__init__.py`에 새 도구를 등록하는 것을 잊지 마세요!**
+`app/tools/` 폴더에 `analyst.py`를 생성하고 도구를 구현하세요.
 
 #### Step 3. Analyst 에이전트 생성
 
