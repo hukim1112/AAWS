@@ -9,11 +9,11 @@
 
 ## 📋 전체 미션 개요
 
-| 미션 | 주제 | 핵심 키워드 | 예상 소요 |
+| 미션 | 주제 | 핵심 키워드 |
 |:---:|:---|:---|:---:|
-| **Mission 1** | 시나리오 도전 & 프롬프트 튜닝 | Prompt Engineering, Evaluation | ~2h |
-| **Mission 2** | Analyst 에이전트 구축 | 새 에이전트 설계, 도구 제작, 시각화 | ~2h |
-| **Mission 3** | 에이전트 고도화 (선택 미션) | Pattern Memory, Model Fallback, Skills | ~1h |
+| **Mission 1** | 시나리오 도전 & 프롬프트 튜닝 | Prompt Engineering, Evaluation |
+| **Mission 2** | Analyst 에이전트 구축 | 새 에이전트 설계, 도구 제작, 시각화 |
+| **Mission 3** | 에이전트 고도화 (선택 미션) | Pattern Memory, Model Fallback, Skills |
 
 각 미션은 이전 미션의 결과물 위에 쌓아 올리는 **점진적 빌드업** 구조입니다. 서두르지 말고 각 단계의 "왜?"를 충분히 체감하며 진행하세요.
 
