@@ -10,7 +10,7 @@
 ## 📋 전체 미션 개요
 
 | 미션 | 주제 | 핵심 키워드 |
-|:---:|:---|:---|:---:|
+|:---:|:---|:---|
 | **Mission 1** | 시나리오 도전 & 프롬프트 튜닝 | Prompt Engineering, Evaluation |
 | **Mission 2** | Analyst 에이전트 구축 | 새 에이전트 설계, 도구 제작, 시각화 |
 | **Mission 3** | 에이전트 고도화 (선택 미션) | Pattern Memory, Model Fallback, Skills |
