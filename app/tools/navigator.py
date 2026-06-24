@@ -7,6 +7,7 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from browser_use import Agent, Browser, ChatGoogle, ChatOpenAI
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
+from langchain_core.prompts import PromptTemplate
 from app.schemas import NavigatorContext
 from app.tools.common import CostTracker
 from app.prompts.navigator import BROWSER_AGENT_GUIDE
@@ -310,6 +311,79 @@ async def browse_web(runtime: ToolRuntime[NavigatorContext], url: str, instructi
     success = history.is_successful()
     result_text = history.final_result() or "결과 반환 없음"
     
-    summary = f"[browse_web 실행 요약] 스텝: {steps}/{15}, 성공: {'✅' if success else '❌'}, 최종 URL: {final_url}\n"
+    # LLM을 통한 실행 이력 요약 추출
+    try:
+        # 1. 히스토리를 텍스트 포맷으로 변환
+        history_steps = []
+        for idx, step_data in enumerate(history.history):
+            thought = ""
+            action_str = ""
+            result_str = "Success"
+            
+            model_output = getattr(step_data, "model_output", None)
+            if model_output:
+                thought = getattr(model_output, "thought", "")
+                action = getattr(model_output, "action", None)
+                if action:
+                    action_str = str(action)
+                    
+            res = getattr(step_data, "result", None)
+            if res and hasattr(res, "error") and res.error:
+                result_str = f"Error: {res.error}"
+                
+            history_steps.append(
+                f"Step {idx+1}:\n"
+                f"- Thought: {thought}\n"
+                f"- Action: {action_str}\n"
+                f"- Result: {result_str}"
+            )
+            
+        history_text = "\n\n".join(history_steps) if history_steps else "기록된 히스토리가 없습니다."
+        
+        # 2. 요약 프롬프트 정의
+        summary_prompt = PromptTemplate.from_template("""
+당신은 웹 브라우저 제어 에이전트(browser-use)가 사용자의 지시를 수행한 상세 히스토리를 요약하는 전문가입니다.
+당신의 임무는 이 히스토리를 분석하여 상위 에이전트(Navigator)가 다음 지시를 설계하거나 최종 결과를 판단하는 데 도움이 되도록 작업 요약 리포트를 한국어로 작성하는 것입니다.
+
+[사용자 지시]
+{instruction}
+
+[수행 목적]
+{purpose}
+
+[상세 실행 히스토리]
+{history_text}
+
+[작성 가이드라인]
+1. **작업 수행 요약**: 어떤 단계를 거쳐 지시 사항을 해결하려고 했는지 간결하게 기술하십시오.
+2. **방문한 주요 URL 목록**: 에이전트가 탐색 도중 거쳐간 핵심 URL들을 순서대로 적어주십시오.
+3. **시행착오 및 장애물**: 작업을 수행하는 과정에서 직면한 오류(예: 요소를 찾을 수 없음, 클릭 실패)나 예상치 못한 사이트 동작(예: 로그인 팝업, 광고 리다이렉션)을 상세히 기술하십시오.
+4. **반복 패턴 및 피드백**: 동일한 행동을 반복하며 헛돌았거나 Navigator의 지시 수정이 필요한 부분을 짚어주십시오. 만약 성공했다면, 핵심 성공 요인과 추출한 결과의 유효성을 언급하십시오.
+
+출력은 Markdown 형식으로 작성해 주세요.
+""")
+        
+        # 3. 요약 체인 실행 (동일한 gemini-2.5-flash 분석기 사용)
+        summary_llm = init_chat_model("google_genai:gemini-2.5-flash", temperature=0)
+        formatted_prompt = summary_prompt.format(
+            instruction=instruction,
+            purpose=purpose or "없음",
+            history_text=history_text
+        )
+        
+        resp = await summary_llm.ainvoke([HumanMessage(content=formatted_prompt)])
+        llm_summary = resp.content
+        if isinstance(llm_summary, list):
+            llm_summary = "".join([c.get("text", "") if isinstance(c, dict) else str(c) for c in llm_summary])
+            
+    except Exception as e:
+        llm_summary = f"⚠️ [실행 요약 체인 오류] 히스토리 요약 중 에러 발생: {e}"
+        
+    summary = (
+        f"[browse_web 실행 요약] 스텝: {steps}/{15}, 성공: {'✅' if success else '❌'}, 최종 URL: {final_url}\n\n"
+        f"--- [에이전트 상세 분석 리포트] ---\n"
+        f"{llm_summary}\n"
+        f"---------------------------------\n\n"
+    )
     return summary + result_text
 

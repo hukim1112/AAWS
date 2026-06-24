@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import asyncio
 import importlib
@@ -58,7 +58,10 @@ async def run_scenario(scenario_file: str):
 
     import uuid
     thread_id = f"scenario_test_{uuid.uuid4().hex[:8]}"
-    config = {"configurable": {"thread_id": thread_id}}
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": 100
+    }
     
     print("⏳ 에이전트 수행 중 (상당한 시간이 소요될 수 있습니다)...")
     

@@ -1,9 +1,11 @@
-﻿import os
+import os
 import sys
 import json
 import asyncio
 import uuid
 import time
+import warnings
+warnings.filterwarnings("ignore")
 from dotenv import load_dotenv
 
 from langchain_core.messages import HumanMessage
@@ -68,7 +70,10 @@ async def run_scenario(scenario_file: str):
     )
 
     thread_id_nav = f"nav_test_{uuid.uuid4().hex[:8]}"
-    nav_config = {"configurable": {"thread_id": thread_id_nav}}
+    nav_config = {
+        "configurable": {"thread_id": thread_id_nav},
+        "recursion_limit": 100
+    }
     nav_context = NavigatorContext(shared_browser=shared_browser_instance, response_mode="blueprint")
 
     nav_prompt = f"""
@@ -168,7 +173,10 @@ async def run_scenario(scenario_file: str):
     
     coder_agent = create_coder_agent()
     thread_id_coder = f"coder_test_{uuid.uuid4().hex[:8]}"
-    coder_config = {"configurable": {"thread_id": thread_id_coder}}
+    coder_config = {
+        "configurable": {"thread_id": thread_id_coder},
+        "recursion_limit": 100
+    }
     coder_context = SeniorCoderContext()
 
     if not saved_paths:

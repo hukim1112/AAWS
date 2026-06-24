@@ -102,8 +102,6 @@ async def chat_to_navigator(request: str, runtime: ToolRuntime, config: Runnable
             config=inner_config
         )
         return_content = extract_text_content(result["messages"][-1].content)
-        print(f"\n🔍 [DEBUG] chat_to_navigator 반환값 길이: {len(return_content)}자")
-        print(f"🔍 [DEBUG] chat_to_navigator 반환값 시작 200자: {return_content[:200]}")
         return return_content
     finally:
         if browser_instance:
@@ -136,9 +134,6 @@ async def chat_to_coder(task_description: str, runtime: ToolRuntime, config: Run
         config=inner_config
     )
     return_content = extract_text_content(result["messages"][-1].content)
-    print(f"\n🔍 [DEBUG] chat_to_coder 반환값 길이: {len(return_content)}자")
-    print(f"🔍 [DEBUG] chat_to_coder 반환값 시작 200자: {return_content[:200]}")
-    print(f"🔍 [DEBUG] chat_to_coder 반환값 끝 200자: ...{return_content[-200:]}")
     return return_content
 
 
