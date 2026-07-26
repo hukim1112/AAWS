@@ -111,7 +111,7 @@ AAWS/
 │   ├── server.py           #   └── 에이전트 API 서빙 백엔드 (FastAPI)
 │   ├── client.py           #   └── 터미널용 테스트 CLI 클라이언트
 │   └── ui.py               #   └── 에이전트 실시간 채팅 프론트엔드 (Streamlit)
-├── tests/                  # 🧪 평가 자동화 및 러너 스크립트 (순차형 + 감독형)
+├── tests/                  # 🧪 평가 자동화 러너 및 헬퍼 모듈 (test_helpers, config_loader)
 ├── artifacts/              # 📂 시나리오 명세 및 수집된 데이터 산출물
 │   ├── scenarios/          #   └── 9개의 난이도별 시나리오 명세서 (.md)
 │   └── results/            #   └── 시나리오별 평가 리포트 및 크롤링 결과 JSON
