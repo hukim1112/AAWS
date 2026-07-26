@@ -1,7 +1,6 @@
-﻿import os
+import os
 import sys
 import asyncio
-import importlib
 from glob import glob
 from langchain_core.messages import HumanMessage
 
@@ -19,10 +18,7 @@ if project_root not in sys.path:
 
 from app.scenario_parser import Scenario
 from app.evaluator import evaluate_scenario_result
-
-# 동적 로드를 통해 숫자로 시작하는 모듈 임포트
-supervisor_mod = importlib.import_module("workflows.02_supervisor_workflow")
-agent_executor = supervisor_mod.agent_executor
+from app.agents.supervisor import agent_executor
 
 async def run_scenario(scenario_file: str):
     """지정된 시나리오 마크다운 파일을 파싱하여 슈퍼바이저 에이전트에 작업을 요청합니다."""
@@ -134,27 +130,13 @@ async def run_scenario(scenario_file: str):
         with open(log_output_path, "a", encoding="utf-8") as f:
             f.write(f"\n❌ 시나리오 중 오류 발생: {e}\n")
 
+from tests.config_loader import load_target_scenarios
+
 async def main():
     artifacts_dir = os.path.join(project_root, "artifacts", "scenarios")
     
-    # 🎯 여기서 테스트할 시나리오 목록을 명시적으로 관리합니다.
-    # 테스트할 시나리오만 주석 해제(Uncomment)하여 사용하세요.
-    target_scenarios = [
-        # ── Level 1 ──
-        "quotes_01_pagination.md",
-        # "quotes_02_tag_filter.md",
-        # ── Level 2 ~ 2.5 ──
-        # "ajax_01_playwright_wait.md",
-        # "ajax_02_api_reverse_engineering.md",
-        # ── Level 3 ──
-        # "github_01_trending_scraping.md",       # 실제 동적 사이트 (GitHub)
-        # "quotes_03_multi_step_crawling.md",     # 복합 크롤링 로직
-        # ── Level 4 ~ 4.5 ──
-        # "danawa_01_filter_search.md",           # AJAX + 필터 UI
-        # "danawa_02_deep_table_parsing.md",      # 중첩 테이블 + 동적 버튼
-        # ── Level 5 (최고 난이도) ──
-        # "danawa_03_bulk_detail_crawling.md",    # 2단계 대량 수집
-    ]
+    # 🎯 tests/test_config.yaml 파일에서 실행 대상 시나리오를 로드합니다.
+    target_scenarios = load_target_scenarios(project_root)
     
     scenario_files = []
     for filename in target_scenarios:
@@ -165,7 +147,7 @@ async def main():
             print(f"⚠️ 파일 없음 (건너뜀): {filepath}")
     
     if not scenario_files:
-        print("❌ 실행할 시나리오 파일이 없습니다. target_scenarios 리스트를 확인하세요.")
+        print("❌ 실행할 시나리오 파일이 없습니다. tests/test_config.yaml 설정을 확인하세요.")
         return
         
     print(f"총 {len(scenario_files)}개의 시나리오 테스트를 시작합니다.")

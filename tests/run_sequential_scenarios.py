@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import json
 import asyncio
@@ -267,26 +267,13 @@ async def run_scenario(scenario_file: str):
         with open(log_output_path, "a", encoding="utf-8") as f:
             f.write(err_msg + "\n")
 
+from tests.config_loader import load_target_scenarios
+
 async def main():
     artifacts_dir = os.path.join(project_root, "artifacts", "scenarios")
     
-    # 🎯 여기서 테스트할 시나리오 목록을 명시적으로 관리합니다.
-    target_scenarios = [
-        # ── Level 1 ──
-        "quotes_01_pagination.md",
-        # "quotes_02_tag_filter.md",
-        # ── Level 2 ~ 2.5 ──
-        # "ajax_01_playwright_wait.md",
-        # "ajax_02_api_reverse_engineering.md",
-        # ── Level 3 ──
-        # "github_01_trending_scraping.md",       # 실제 동적 사이트 (GitHub)
-        # "quotes_03_multi_step_crawling.md",     # 복합 크롤링 로직
-        # ── Level 4 ~ 4.5 ──
-        # "danawa_01_filter_search.md",           # AJAX + 필터 UI
-        # "danawa_02_deep_table_parsing.md",      # 중첩 테이블 + 동적 버튼
-        # ── Level 5 (최고 난이도) ──
-        # "danawa_03_bulk_detail_crawling.md",    # 2단계 대량 수집
-    ]
+    # 🎯 tests/test_config.yaml 파일에서 실행 대상 시나리오를 로드합니다.
+    target_scenarios = load_target_scenarios(project_root)
     
     scenario_files = []
     for filename in target_scenarios:
@@ -297,7 +284,7 @@ async def main():
             print(f"⚠️ 파일 없음 (건너뜀): {filepath}")
     
     if not scenario_files:
-        print("❌ 실행할 시나리오 파일이 없습니다. target_scenarios 리스트를 확인하세요.")
+        print("❌ 실행할 시나리오 파일이 없습니다. tests/test_config.yaml 설정을 확인하세요.")
         return
         
     print(f"총 {len(scenario_files)}개의 순차 워크플로우(Sequential) 시나리오 테스트를 시작합니다.")

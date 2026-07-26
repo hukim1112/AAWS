@@ -1,4 +1,4 @@
-﻿# 🎯 Day 2 Mission: 진화하는 에이전트 팀 구축
+# 🎯 Day 2 Mission: 진화하는 에이전트 팀 구축
 
 > **Agentic AI Hands-on : 데이터 수집·분석·시각화·Q&A 시스템 구축**
 > 
@@ -22,39 +22,57 @@
 ## 🟢 Mission 1: 시나리오 도전 & 프롬프트 튜닝 (~1h)
 
 ### 목표
-기본 에이전트 팀(Navigator + Coder)을 실전 시나리오에 투입하고, **프롬프트 수정만으로** 성능을 어디까지 끌어올릴 수 있는지 실험합니다.
+기본 에이전트 팀(Supervisor + Navigator + Coder)을 실전 시나리오에 투입하고, **프롬프트 수정만으로** 성능을 어디까지 끌어올릴 수 있는지 실험합니다.
 
 ### 진행 방식
 
-#### Step 1. 기본 시나리오 실행 (Level 1)
-`artifacts/scenarios/` 폴더에 준비된 시나리오 중 **Level 1** 시나리오를 골라 실행해보세요.
+#### Step 1. 시나리오 선택 (`tests/test_config.yaml`)
+
+테스트할 시나리오는 **`tests/test_config.yaml`** 파일에서 간편하게 선택할 수 있습니다.
+파일을 열고 테스트하고 싶은 시나리오의 주석(`\#`)을 해제하세요.
+
+```yaml
+# tests/test_config.yaml
+scenarios:
+  # ── Level 1 ──
+  - quotes_01_pagination.md       # 실행할 시나리오 (주석 해제)
+  # - quotes_02_tag_filter.md     # 주석 처리된 시나리오는 건너뜀
+```
+
+#### Step 2. Supervisor 시나리오 실행 (Level 1)
+
+주 세션에서는 감독형 에이전트 팀(**Supervisor Workflow**)을 기반으로 실행합니다:
 
 ```bash
-# 프로젝트 루트(AAWS_Eval)에서 실행
-python -m tests.run_sequential_scenarios
+# 프로젝트 루트에서 실행 (Supervisor 방식)
+python -m tests.run_supervisor_scenarios
 ```
+
+> **💡 참고 (Sequential 방식):**  
+> 개별 에이전트(Navigator ➔ Coder)의 동작을 고정 순서로 단순 검증하고 싶을 때는 `python -m tests.run_sequential_scenarios`를 사용할 수도 있습니다.
 
 **추천 시작 시나리오:**
 - `quotes_01_pagination.md` — 정적 사이트의 다중 페이지 수집
 - `quotes_02_tag_filter.md` — 태그 필터링 기반 수집
 
-#### Step 2. 결과 분석
-실행 후 `artifacts/` 폴더에 생성된 평가 로그(`*_log.md`)를 확인하세요.
+#### Step 3. 결과 분석
+실행 후 `artifacts/results/[scenario_id]/` 폴더에 생성된 평가 로그(`sup_log.md`)와 결과 파일(`sup_result.json`)을 확인하세요.
 
+- Supervisor가 하위 에이전트(Navigator, Coder)에게 적절히 역할을 위임했나요?
 - Navigator가 올바른 **전략(Strategy)**을 선택했나요?  
 - Coder가 효율적인 방식(requests vs playwright)을 채택했나요?  
 - 데이터의 Schema가 기대한 것과 일치하나요?
 
-#### Step 3. 프롬프트 튜닝
-`app/prompts/` 폴더에서 Navigator 또는 Coder의 시스템 프롬프트를 수정하여 성능을 개선하세요.
+#### Step 4. 프롬프트 튜닝
+`app/prompts/` 폴더에서 Supervisor, Navigator, Coder의 시스템 프롬프트를 수정하여 성능을 개선하세요.
 
 > **💡 튜닝 포인트 예시:**
-> - Navigator에게 "URL 패턴을 먼저 확인하라"는 지침을 더 강하게 강조
-> - Coder에게 "Static SSR이면 반드시 requests를 써라"는 제약 조건 추가
-> - 에러 발생 시의 행동 지침을 더 구체화
+> - `app/prompts/supervisor.py`: Coder 실패 시 Navigator에게 cross-validation을 지시하도록 로직 강화
+> - `app/prompts/navigator.py`: "URL 패턴을 먼저 확인하라"는 지침을 더 강하게 강조
+> - `app/prompts/coder.py`: 코드 버그와 외부 사이트 요인(차단/구조 변경) 구분 지침 추가
 
-#### Step 4. 난이도 업 (Level 2)
-튜닝된 프롬프트로 Level 2 시나리오에 도전하세요.
+#### Step 5. 난이도 업 (Level 2)
+`tests/test_config.yaml`에서 Level 2 시나리오를 활성화하고 다시 도전하세요.
 
 - `ajax_01_playwright_wait.md` — 동적 로딩 대기가 필요한 AJAX 페이지
 - `ajax_02_api_reverse_engineering.md` — 숨겨진 백엔드 API를 찾아내야 하는 시나리오
@@ -63,13 +81,6 @@ python -m tests.run_sequential_scenarios
 - [ ] Level 1 시나리오 1개 이상 성공 (평가 로그 확인)
 - [ ] 프롬프트 수정 전/후 비교 메모 (어떤 지침을 추가/변경했고, 결과가 어떻게 달라졌는지)
 - [ ] Level 2 시나리오 도전 결과 (성공 또는 실패 원인 분석)
-
-### 🤔 생각해볼 질문
-> **"데이터를 성공적으로 수집했다면, 그 다음은?"**
->
-> JSON 파일에 쌓인 데이터는 그 자체로는 가치가 없습니다.
-> 데이터를 읽고, 패턴을 찾고, 인사이트를 뽑아내고, 시각적으로 전달하는 것까지가 진짜 파이프라인입니다.
-> 이 역할을 담당할 새로운 팀원이 필요합니다 — **Analyst 에이전트**.
 
 ---
 
@@ -81,8 +92,8 @@ Mission 1에서 수집한 데이터를 **분석하고 시각화하는 Analyst �
 ### 배경: 왜 Analyst가 필요한가?
 
 ```
-[현재]  Navigator → Coder → JSON 파일 생성  ← 여기서 끝!
-[목표]  Navigator → Coder → JSON → Analyst → 📊 분석 리포트 + 차트
+[현재]  Supervisor → Navigator & Coder → JSON 파일 생성  ← 여기서 끝!
+[목표]  Supervisor → Navigator & Coder → Analyst → 📊 분석 리포트 + 차트
 ```
 
 수집은 시작일 뿐입니다. 비즈니스 현장에서 진짜 필요한 것은 "이 데이터가 무엇을 말해주는가"에 대한 분석과 시각적 전달입니다. 여러분이 직접 세 번째 에이전트를 설계하고 팀에 합류시켜 보세요.
@@ -133,146 +144,43 @@ def create_analyst_agent(model_name="google_genai:gemini-flash-latest", temperat
     return agent
 ```
 
-**Analyst의 시스템 프롬프트(`app/prompts/analyst.py`)도 직접 작성**해야 합니다!
-> - Analyst는 어떤 성격을 가져야 하나요? (꼼꼼한 데이터 사이언티스트? 비즈니스 인사이트 전문가?)
-> - 어떤 분석을 우선적으로 수행해야 하나요? (기술 통계? 빈도 분석? 트렌드?)
-> - 시각화 스타일에 대한 가이드라인이 필요할까요?
-
-#### Step 4. 파이프라인 연동 — 수집 데이터를 Analyst에게 전달
-
-이제 가장 중요한 부분입니다. Mission 1에서 수집한 JSON 데이터를 Analyst에게 넘겨 분석을 요청하세요.
+#### Step 4. 파이프라인 연동 — Supervisor에 Analyst 추가하기
 
 **방법 A (간단):** 수동으로 Analyst 에이전트를 호출하는 테스트 스크립트 작성
 ```python
 # tests/run_analyst_test.py
 analyst = create_analyst_agent()
 result = await analyst.ainvoke(
-    {"messages": [("user", "artifacts/code/quotes_5pages.json 파일을 분석하고 시각화해주세요.")]},
+    {"messages": [("user", "artifacts/results/quotes_01/sup_result.json 파일을 분석하고 시각화해주세요.")]},
     config={"configurable": {"thread_id": "analyst_test"}}
 )
 ```
 
-**방법 B (도전):** 기존 Sequential 워크플로우(`workflows/01_sequential_workflow.py`)를 확장하여 `Navigator → Coder → Analyst` 3단계 파이프라인으로 연결
+**방법 B (권장):** `app/agents/supervisor.py`에 `chat_to_analyst` 도구를 추가하여 Supervisor가 `Navigator → Coder → Analyst` 3단계 팀을 종합 지휘하도록 확장
 
 #### Step 5. 분석 결과 확인
 
 Analyst가 생성한 산출물을 확인하세요:
-- `artifacts/code/` 에 차트 이미지(`.png`)가 생성되었나요?
+- `artifacts/code/` 또는 결과 폴더에 차트 이미지(`.png`)가 생성되었나요?
 - 분석 리포트(`.md`)에 의미 있는 인사이트가 담겨 있나요?
-- 데이터의 패턴이나 이상치를 잘 포착했나요?
-
-### ✅ Mission 2 산출물
-- [ ] `app/tools/analyst.py` — Analyst 전용 도구 최소 2개 이상
-- [ ] `app/prompts/analyst.py` — Analyst 시스템 프롬프트
-- [ ] `app/agents/analyst.py` — Analyst 에이전트 팩토리 함수
-- [ ] Mission 1에서 수집한 데이터를 Analyst에게 전달하여 생성된 **차트 이미지 1개 이상**
-- [ ] (보너스) `Navigator → Coder → Analyst` 3단계 파이프라인 연동
-
-### 🤔 생각해볼 질문
-> **"에이전트 1개를 새로 추가하는 데 필요한 것은 무엇이었나요?"**
->
-> 도구(Tools) + 프롬프트(Prompt) + 에이전트 팩토리(Agent Factory) + 패키지 등록(__init__.py)
-> 이 패턴을 이해했다면, 앞으로 어떤 역할의 에이전트든 동일한 방식으로 확장할 수 있습니다.
-> QA 에이전트, 번역 에이전트, 마케팅 에이전트... 구조는 동일합니다.
 
 ---
 
 ## 🔴 Mission 3: 에이전트 고도화 — 선택 미션 (~1h)
 
-아래 네 가지 트랙 중 **하나 이상**을 선택하여 도전하세요.  
-여러분의 관심사와 시간 상황에 맞게 자유롭게 진행합니다.
+아래 네 가지 트랙 중 **하나 이상**을 선택하여 도전하세요.
 
 ### 트랙 A: 🧠 학습하는 에이전트 (Pattern Memory)
-
 **목표:** 에이전트가 시나리오 실행 경험(성공/실패)을 `pattern_memory.json`에 자동 기록하고, 다음 실행 시 미들웨어를 통해 시스템 프롬프트에 자동 주입하는 "지속적 학습 체계"를 구현합니다.
 
-**핵심 구현 요소:**
-1. 경험 기록 JSON 스키마 설계 (도메인, 전략, 핵심 학습, 실패 패턴)
-2. 평가 완료 후 자동 기록 로직 (Evaluator 확장 또는 별도 스크립트)
-3. Dynamic System Prompt 미들웨어 — 관련 경험을 자동 검색하여 프롬프트에 주입
-
-```python
-# 미들웨어 핵심 아이디어
-@wrap_model_call
-async def inject_pattern_memory(request, handler):
-    memories = load_pattern_memory()
-    relevant = find_relevant_patterns(memories, current_context)
-    if relevant:
-        augmented = request.system_prompt + format_memories(relevant)
-        request = request.override(system_prompt=augmented)
-    return await handler(request)
-```
-
-**산출물:** `pattern_memory.json` + 미들웨어 코드 + 주입 전/후 성능 비교
-
----
-
 ### 트랙 B: 🔄 Model Fallback 미들웨어
-
 **목표:** 에이전트가 어려운 문제를 만나거나 API 사용량 초과 시, 자동으로 더 강력한(또는 대체) 모델로 전환하는 미들웨어를 구현합니다.
 
-```python
-@wrap_model_call
-async def model_fallback(request, handler):
-    try:
-        response = await handler(request)
-        if detect_low_quality(response):
-            upgraded = request.override(model="gemini-pro-latest")
-            return await handler(upgraded)
-        return response
-    except RateLimitError:
-        fallback = request.override(model="gpt-4o-mini")
-        return await handler(fallback)
-```
-
-**산출물:** 동작하는 Model Fallback 미들웨어 코드 + 전환이 발생한 로그 캡처
-
----
-
 ### 트랙 C: 📚 Skill System 적용
-
-**목표:** 에이전트에게 도메인별 전문 스킬을 동적으로 로드하는 구조를 구현합니다.
-
-**아이디어:**
-- `app/skills/ecommerce/` — 이커머스 사이트 전용 셀렉터 패턴 + 가격 파싱 도구
-- `app/skills/news/` — 뉴스 사이트 전용 기사 추출 패턴 + 날짜 정규화 도구
-- 에이전트가 타겟 사이트의 유형을 파악한 후, 해당 스킬을 동적 장착
-
-**산출물:** 최소 1개의 스킬 폴더(`SKILL.md` + `tools.py`) + 스킬 로딩 미들웨어
-
----
+**목표:** 에이전트에게 도메인별 전문 스킬을 동적으로 로드하는 구조를 구현합니다 (`app/skills/`).
 
 ### 트랙 D: 🆕 나만의 시나리오 작성 & 도전
-
-**목표:** 본인이 실무에서 실제로 수집하고 싶은 데이터 소스를 정하고, 처음부터 끝까지 도전합니다.
-
-**진행:**
-1. `artifacts/scenarios/` 에 새 시나리오 `.md` 파일을 YAML Frontmatter 형식으로 작성
-2. 에이전트 팀을 투입하여 실행
-3. 실패 시 원인을 분석하고 프롬프트를 개선하여 재도전
-4. 수집 성공 시 Mission 2의 Analyst에게 분석까지 시켜보기
-
-**산출물:** 작성한 시나리오 파일 + 실행 결과 + 시행착오 회고 기록
-
----
-
-## 🏆 최종 발표 & 회고
-
-모든 미션을 마친 후, 팀별로 다음 내용을 공유합니다:
-
-1. **완성된 파이프라인 시연**
-   - Navigator → Coder → Analyst 파이프라인이 실제로 동작하는 모습
-   - Analyst가 생성한 차트와 리포트 시각적 공유
-   
-2. **가장 인상 깊었던 실패와 해결 과정**
-   - 에이전트가 어디서 막혔고, 어떻게 돌파했는가?
-   
-3. **에이전트 확장의 패턴**
-   - "에이전트 1개를 추가하는 데 필요한 것: 도구 + 프롬프트 + 팩토리 + 등록"
-   - 이 패턴으로 어떤 새 에이전트를 만들 수 있을까?
-   
-4. **현업 적용 아이디어**
-   - 오늘 구축한 멀티 에이전트 파이프라인을 본인의 업무에 어떻게 적용할 수 있을까?
+**목표:** 본인이 실무에서 실제로 수집하고 싶은 데이터 소스를 정하고 시나리오 파일(`artifacts/scenarios/my_scenario.md`)을 작성하여 도전합니다.
 
 ---
 
@@ -280,45 +188,24 @@ async def model_fallback(request, handler):
 
 ### 프로젝트 실행 명령어
 ```bash
-# 순차 워크플로우 테스트
-python -m tests.run_sequential_scenarios
+# 1. 실행 대상 시나리오 선택
+# tests/test_config.yaml 파일 편집 (주석 해제)
 
-# 슈퍼바이저 워크플로우 테스트
+# 2. Supervisor 워크플로우 테스트 실행 (주 테스트 방법)
 python -m tests.run_supervisor_scenarios
+
+# 3. (선택) 순차 워크플로우 테스트 실행
+python -m tests.run_sequential_scenarios
 ```
 
 ### 핵심 파일 위치
 | 용도 | 경로 |
 |:---|:---|
+| 시나리오 선택 설정 | `tests/test_config.yaml` |
+| Supervisor 프롬프트 | `app/prompts/supervisor.py` |
 | Navigator 프롬프트 | `app/prompts/navigator.py` |
 | Coder 프롬프트 | `app/prompts/coder.py` |
-| Supervisor 프롬프트 | `app/prompts/supervisor.py` |
+| Supervisor 에이전트 | `app/agents/supervisor.py` |
 | Navigator 도구 | `app/tools/navigator.py` |
 | Coder 도구 | `app/tools/coder.py` |
-| 에이전트 미들웨어 | `app/agents/utils.py` |
-| 테스트 시나리오 | `artifacts/scenarios/*.md` |
-| 평가 결과 로그 | `artifacts/[scenario_id]/*_log.md` |
-
-### 에이전트 추가 체크리스트 (Mission 2 참고)
-```
-□ app/tools/[역할].py          ← 도구 구현
-□ app/tools/__init__.py        ← 도구 등록 (export)
-□ app/prompts/[역할].py        ← 시스템 프롬프트 작성
-□ app/prompts/__init__.py      ← 프롬프트 등록 (export)
-□ app/agents/[역할].py         ← 에이전트 팩토리 함수
-□ app/agents/__init__.py       ← 에이전트 등록 (export)
-```
-
-### 시나리오 난이도 가이드
-| 난이도 | 시나리오 | 핵심 도전 |
-|:---:|:---|:---|
-| ⭐ Level 1 | `quotes_01_pagination` | URL 패턴 인식, 정적 페이지 파싱 |
-| ⭐ Level 1 | `quotes_02_tag_filter` | 태그 기반 필터링, 경로 조합 |
-| ⭐⭐ Level 2 | `ajax_01_playwright_wait` | 동적 렌더링 대기, Playwright 제어 |
-| ⭐⭐½ Level 2.5 | `ajax_02_api_reverse_engineering` | 숨겨진 API 발견, 역공학 |
-| ⭐⭐⭐ Level 3 | `github_01_trending_scraping` | 실제 동적 사이트, JS 렌더링 DOM 분석 |
-| ⭐⭐⭐ Level 3 | `quotes_03_multi_step_crawling` | 다단계 워크플로우, 에이전트 간 데이터 전달 |
-| ⭐⭐⭐⭐ Level 4 | `danawa_01_filter_search` | AJAX 동적 로딩, 복잡한 필터 UI, 광고/본문 구분 |
-| ⭐⭐⭐⭐½ Level 4.5 | `danawa_02_deep_table_parsing` | 중첩 테이블, 동적 버튼 클릭, 스펙 텍스트 정규화 |
-| ⭐⭐⭐⭐⭐ Level 5 | `danawa_03_bulk_detail_crawling` | 2단계(목록→상세) 대량 수집, 페이지네이션, 봇 차단 대응 |
-
+| 시나리오 실행 로그 | `artifacts/results/[scenario_id]/sup_log.md` |
