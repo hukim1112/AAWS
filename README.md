@@ -111,8 +111,7 @@ AAWS/
 │   ├── server.py           #   └── 에이전트 API 서빙 백엔드 (FastAPI)
 │   ├── client.py           #   └── 터미널용 테스트 CLI 클라이언트
 │   └── ui.py               #   └── 에이전트 실시간 채팅 프론트엔드 (Streamlit)
-├── workflows/              # 🔗 시나리오 자동 실행을 위한 워크플로우 정의
-├── tests/                  # 🧪 평가 자동화 및 러너 스크립트
+├── tests/                  # 🧪 평가 자동화 러너 및 헬퍼 모듈 (test_helpers, config_loader)
 ├── artifacts/              # 📂 시나리오 명세 및 수집된 데이터 산출물
 │   ├── scenarios/          #   └── 9개의 난이도별 시나리오 명세서 (.md)
 │   └── results/            #   └── 시나리오별 평가 리포트 및 크롤링 결과 JSON
@@ -191,7 +190,7 @@ python -m tests.run_supervisor_scenarios
 | **제어 흐름** | 확정적(Deterministic) — Navigator → Coder 순서 고정 | 동적(Dynamic) — Supervisor LLM이 상황에 따라 판단 |
 | **실행 주체** | Python 코드가 직접 에이전트를 순서대로 호출 | Supervisor 에이전트가 도구(Tool)로 하위 에이전트를 호출 |
 | **Blueprint 전달** | 파일 저장 후 Coder에게 경로 전달 | Supervisor가 Navigator 응답을 받아 Coder에게 직접 전달 |
-| **사용 코드** | `tests/run_sequential_scenarios.py` | `workflows/02_supervisor_workflow.py` |
+| **사용 코드** | `tests/run_sequential_scenarios.py` | `tests/run_supervisor_scenarios.py` → `app/agents/supervisor.py` |
 | **장점** | 단순하고 예측 가능, 디버깅 용이 | 유연한 분기 가능 (재시도, 추가 탐색 등) |
 | **적합한 상황** | 구조가 단순한 사이트, 개별 에이전트 성능 검증 | 복잡한 시나리오, 에이전트 간 동적 협업 필요 시 |
 
@@ -204,7 +203,7 @@ python -m tests.run_supervisor_scenarios
                                └── 💻 chat_to_coder()     → 코드 작성·실행
 ```
 
-> 💡 **Tip**: 특정 시나리오만 집중적으로 테스트하고 싶다면, `tests/run_sequential_scenarios.py` (혹은 `run_supervisor_scenarios.py`) 파일 하단의 `target_scenarios` 리스트에서 타겟 시나리오 파일명의 주석을 해제하여 간편하게 관리할 수 있습니다.
+> 💡 **Tip**: 특정 시나리오만 집중적으로 테스트하고 싶다면, `tests/test_config.yaml` 파일에서 원하는 시나리오 파일명의 주석(#)을 해제하여 간편하게 선택할 수 있습니다.
 
 ---
 
