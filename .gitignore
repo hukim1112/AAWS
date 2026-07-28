@@ -27,3 +27,4 @@ agent_cost_log.json
 *.log
 .gemini/
 my_quotes_profile/
+

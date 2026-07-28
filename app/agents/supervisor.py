@@ -17,6 +17,7 @@ load_dotenv(override=True)
 # 워커 에이전트들 임포트 — app/ 패키지 기반
 from app.agents.navigator import create_navigator_agent
 from app.agents.coder import create_coder_agent
+from app.agents.analyst import create_analyst_agent
 from app.schemas import NavigatorContext, SeniorCoderContext
 
 # 추가 유틸리티 툴스 (Tool Factory)
@@ -34,6 +35,7 @@ from browser_use import Agent, Browser, ChatGoogle
 # =========================================================
 GLOBAL_NAVIGATOR_AGENT = create_navigator_agent()
 GLOBAL_CODER_AGENT = create_coder_agent()
+GLOBAL_ANALYST_AGENT = create_analyst_agent()
 
 # =========================================================
 # 2. 분리된(Context Isolated) Handoff 도구 (Agents as Tools 패턴)
@@ -67,6 +69,7 @@ async def chat_to_navigator(request: str, runtime: ToolRuntime, config: Runnable
         inner_config = config.copy() if config else {}
         inner_config["configurable"] = inner_config.get("configurable", {}).copy()
         inner_config["configurable"]["thread_id"] = config.get("configurable", {}).get("thread_id", "default_thread")
+        inner_config["recursion_limit"] = config.get("recursion_limit", 100)
         
         result = await GLOBAL_NAVIGATOR_AGENT.ainvoke(
             {"messages": [("user", prompt)]},
@@ -98,6 +101,7 @@ async def chat_to_coder(task_description: str, runtime: ToolRuntime, config: Run
     inner_config = config.copy() if config else {}
     inner_config["configurable"] = inner_config.get("configurable", {}).copy()
     inner_config["configurable"]["thread_id"] = config.get("configurable", {}).get("thread_id", "default_thread")
+    inner_config["recursion_limit"] = config.get("recursion_limit", 100)
     
     result = await GLOBAL_CODER_AGENT.ainvoke(
         {"messages": [("user", prompt)]},
@@ -107,16 +111,61 @@ async def chat_to_coder(task_description: str, runtime: ToolRuntime, config: Run
     return result["messages"][-1].content
 
 
+@tool(parse_docstring=True)
+async def chat_to_analyst(
+    task_description: str,
+    data_filepath: str,
+    log_dir: str,
+    scenario_id: str,
+    runtime: ToolRuntime,
+    config: RunnableConfig
+) -> str:
+    """수집 결과 데이터 분석, 품질 검증, 에이전트 실행 및 토큰/비용 진단, 수집 전략 저장, 차트/인포그래픽 및 종합 리포트 생성을 위해 Analyst 에이전트를 호출합니다.
+
+    Args:
+        task_description: 분석가에게 지시할 핵심 과제 및 요구사항 (예: "수집된 데이터를 프로파일링하고, 실행 로그를 진단하여 종합 분석 리포트를 작성해주세요.")
+        data_filepath: 수집 결과 JSON 파일 경로 (예: 'artifacts/results/quotes_01_pagination/runs/20260728_141922/sup_result.json')
+        log_dir: 실행 결과 및 로그 보관 폴더 (예: 'artifacts/results/quotes_01_pagination/runs/20260728_141922')
+        scenario_id: 시나리오 ID (예: 'quotes_01_pagination')
+    """
+    prompt = (
+        f"[Analyst Task Directives]\n"
+        f"- Target Scenario ID: {scenario_id}\n"
+        f"- Data File Path: {data_filepath}\n"
+        f"- Log Directory: {log_dir}\n"
+        f"- Task Detail: {task_description}\n\n"
+        f"위 데이터 및 로그 경로를 기반으로 profile_data_quality, analyze_agent_performance, "
+        f"save_collection_strategy, generate_infographic_image/create_visualization_charts, "
+        f"write_analyst_report 도구를 사용하여 분석을 수행하고 보고서를 작성하세요."
+    )
+
+    print(f"\n📊 [Supervisor] Analyst 에이전트와 대화 중... (Scenario: {scenario_id})")
+
+    inner_config = config.copy() if config else {}
+    inner_config["configurable"] = inner_config.get("configurable", {}).copy()
+    inner_config["configurable"]["thread_id"] = config.get("configurable", {}).get("thread_id", "default_thread")
+    inner_config["recursion_limit"] = config.get("recursion_limit", 100)
+
+    result = await GLOBAL_ANALYST_AGENT.ainvoke(
+        {"messages": [("user", prompt)]},
+        config=inner_config
+    )
+    return result["messages"][-1].content
+
+
 # =========================================================
 # 3. Supervisor Agent 구성
 # =========================================================
 
-supervisor_model = init_chat_model("google_genai:gemini-2.5-pro", temperature=0.1)
+from app.utils import get_llm
+
+supervisor_model = get_llm("gemini-2.5-pro", temperature=0.1)
 supervisor_checkpointer = InMemorySaver()
 
 supervisor_agent = create_agent(
     model=supervisor_model,
     system_prompt=SUPERVISOR_SYSTEM_PROMPT,
+    # 📌 chat_to_analyst 도구는 supervisor 코드 내에 정의되어 있으나, 활성화 시에만 아래 리스트에 추가합니다.
     tools=[chat_to_navigator, chat_to_coder] + tools_supervisor,
     checkpointer=supervisor_checkpointer,
     name="supervisor_agent"

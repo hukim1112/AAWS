@@ -1,5 +1,6 @@
 from .navigator import create_navigator_agent
 from .coder import create_coder_agent
+from .analyst import create_analyst_agent
 from .utils import dynamic_response_format
 
 # 🏭 에이전트 레지스트리 (Agent Registry)
@@ -10,7 +11,7 @@ AGENT_REGISTRY = [
         "module": "app.agents.supervisor",
         "prefix": "/supervisor",
         "tags": ["Supervisor"],
-        "description": "전체 수집 프로세스를 조율하고 네비게이터와 코더를 지휘하는 감독 에이전트"
+        "description": "전체 수집 프로세스를 조율하고 네비게이터, 코더, 분석가를 지휘하는 감독 에이전트"
     },
     {
         "name": "navigator",
@@ -27,6 +28,13 @@ AGENT_REGISTRY = [
         "description": "수집 설계도를 바탕으로 수집 코드를 작성하고 자가 수정(Self-Healing)을 수행하는 코더 에이전트"
     },
     {
+        "name": "analyst",
+        "module": "app.agents.analyst",
+        "prefix": "/analyst",
+        "tags": ["Analyst"],
+        "description": "데이터 품질 검증, 성능/비용 진단, 수집 전략 보관 및 인포그래픽 리포트를 작성하는 분석가 에이전트"
+    },
+    {
         "name": "chatbot",
         "module": "app.agents.chatbot",
         "prefix": "/chatbot",
@@ -39,5 +47,6 @@ __all__ = [
     "AGENT_REGISTRY",
     "create_navigator_agent",
     "create_coder_agent",
+    "create_analyst_agent",
     "dynamic_response_format"
 ]

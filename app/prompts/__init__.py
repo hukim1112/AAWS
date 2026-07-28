@@ -1,3 +1,11 @@
 from .navigator import NAVIGATOR_SYSTEM_PROMPT
 from .coder import CODER_SYSTEM_PROMPT
 from .supervisor import SUPERVISOR_SYSTEM_PROMPT
+from .analyst import ANALYST_SYSTEM_PROMPT
+
+__all__ = [
+    "NAVIGATOR_SYSTEM_PROMPT",
+    "CODER_SYSTEM_PROMPT",
+    "SUPERVISOR_SYSTEM_PROMPT",
+    "ANALYST_SYSTEM_PROMPT"
+]

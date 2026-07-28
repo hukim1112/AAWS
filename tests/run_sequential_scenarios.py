@@ -28,8 +28,6 @@ from app.agents import create_navigator_agent, create_coder_agent
 from app.schemas import NavigatorContext, SeniorCoderContext, NavigatorBlueprintCollection
 from app.tools import ARTIFACT_DIR
 from browser_use import Browser
-import uuid
-import time
 
 async def run_scenario(scenario_file: str):
     """지정된 시나리오 마크다운 파일을 파싱하여 Sequential 파이프라인(Navigator -> Coder)으로 작업을 수행합니다."""
@@ -37,7 +35,9 @@ async def run_scenario(scenario_file: str):
     
     print("\n" + "=" * 80)
     print(f"🚀 [Sequential] 시나리오 테스트 시작: {os.path.basename(scenario_file)}")
-    print(f"📝 진행 상황은 터미널과 함께 다음 파일에도 저장됩니다: {paths['log_path']}")
+    print(f"📂 실행 디렉토리: {paths['run_dir']}")
+    print(f"📝 Markdown 로그: {paths['log_path']}")
+    print(f"📋 구조화 로그: {paths['structured_log_path']}")
     print("=" * 80)
 
     # 1. Navigator 실행 (Blueprint 생성)
@@ -61,7 +61,10 @@ async def run_scenario(scenario_file: str):
 
     try:
         final_nav_msg = await stream_agent_execution(
-            navigator_agent, nav_prompt, paths['log_path']
+            navigator_agent, nav_prompt, paths['log_path'],
+            structured_log_path=paths['structured_log_path'],
+            scenario_id=scenario.scenario_id,
+            run_id=paths['run_id']
         )
     finally:
         await shared_browser_instance.stop()
@@ -84,7 +87,10 @@ async def run_scenario(scenario_file: str):
     print("⏳ Coder 가동 중 (코드 작성 및 실행)... 수십 초가 소요될 수 있습니다.")
     try:
         final_coder_msg = await stream_agent_execution(
-            coder_agent, coder_prompt, paths['log_path']
+            coder_agent, coder_prompt, paths['log_path'],
+            structured_log_path=paths['structured_log_path'],
+            scenario_id=scenario.scenario_id,
+            run_id=paths['run_id']
         )
         
         # 3. Evaluator 평가 및 채점
@@ -93,6 +99,8 @@ async def run_scenario(scenario_file: str):
         )
     except Exception as e:
         print(f"\n❌ Coder 실행 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
         with open(paths['log_path'], "a", encoding="utf-8") as f:
             f.write(f"\n❌ Coder 실행 중 오류 발생: {e}\n")
 

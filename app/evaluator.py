@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 from typing import Dict, Any, List
 from pydantic import BaseModel, Field
@@ -57,7 +57,8 @@ async def evaluate_scenario_result(
 
     # 2. Strategy Validation (LLM-as-a-Judge)
     # 평가 모델 초기화
-    eval_model = init_chat_model("google_genai:gemini-flash-latest", temperature=0.1)
+    from app.utils import get_llm
+    eval_model = get_llm("gemini-2.5-flash", temperature=0.1)
     structured_evaluator = eval_model.with_structured_output(EvaluationFeedback)
     
     prompt_template = ChatPromptTemplate.from_messages([

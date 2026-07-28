@@ -33,8 +33,9 @@ class Scenario:
                     print(f"Warning: YAML 파싱 오류 ({filepath}): {e}")
                     metadata = {}
                 
+                fallback_id = os.path.splitext(os.path.basename(filepath))[0]
                 return cls(
-                    scenario_id=metadata.get('scenario_id', 'unknown'),
+                    scenario_id=metadata.get('scenario_id') or fallback_id,
                     site_name=metadata.get('site_name', 'unknown'),
                     target_url=metadata.get('target_url', ''),
                     difficulty=metadata.get('difficulty', 'unknown'),

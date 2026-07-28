@@ -26,4 +26,4 @@ Quotes to Scrape 사이트의 1~5페이지에서 모든 인용구 데이터를 �
 - 저자 이름 (author)
 - 태그 목록 (tags)
 
-결과는 JSON 배열 형태로 'quotes_5pages.json' 파일에 저장해주세요.
+결과는 지정된 경로에 JSON 배열 형태로 저장해주세요.

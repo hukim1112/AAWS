@@ -202,7 +202,8 @@ async def get_page_structure(url: str, scraping_goal: str, wait_seconds: float =
         return "[Warning] HTML이 비어 있습니다. JS 로드 실패 가능성."
 
     structured_html = structured_html[:300000] # 토큰 제한
-    analysis_llm = init_chat_model("google_genai:gemini-2.5-flash", temperature=0)
+    from app.utils import get_llm
+    analysis_llm = get_llm("gemini-2.5-flash", temperature=0)
     
     prompt = f"""
     아래 HTML에서 "{scraping_goal}" 요소를 찾아 CSS 셀렉터를 반환하세요. 응답은 JSON만 출력.
@@ -364,7 +365,8 @@ async def browse_web(runtime: ToolRuntime[NavigatorContext], url: str, instructi
 """)
         
         # 3. 요약 체인 실행 (동일한 gemini-2.5-flash 분석기 사용)
-        summary_llm = init_chat_model("google_genai:gemini-2.5-flash", temperature=0)
+        from app.utils import get_llm
+        summary_llm = get_llm("gemini-2.5-flash", temperature=0)
         formatted_prompt = summary_prompt.format(
             instruction=instruction,
             purpose=purpose or "없음",

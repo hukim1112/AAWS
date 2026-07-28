@@ -32,7 +32,9 @@ async def run_scenario(scenario_file: str):
     
     print("\n" + "=" * 80)
     print(f"🚀 [Supervisor] 시나리오 테스트 시작: {os.path.basename(scenario_file)}")
-    print(f"📝 진행 상황은 터미널과 함께 다음 파일에도 저장됩니다: {paths['log_path']}")
+    print(f"📂 실행 디렉토리: {paths['run_dir']}")
+    print(f"📝 Markdown 로그: {paths['log_path']}")
+    print(f"📋 구조화 로그: {paths['structured_log_path']}")
     print("=" * 80)
     
     mission_prompt = f"""
@@ -56,7 +58,13 @@ async def run_scenario(scenario_file: str):
     try:
         # 1. 에이전트 스트리밍 실행 (이벤트 처리 및 로그 기록 전담)
         final_message = await stream_agent_execution(
-            agent_executor, mission_prompt, paths['log_path']
+            agent_executor, 
+            mission_prompt, 
+            paths['log_path'],
+            structured_log_path=paths['structured_log_path'],
+            scenario_id=scenario.scenario_id,
+            run_id=paths['run_id'],
+            recursion_limit=100
         )
         
         # 2. Evaluator 평가 및 채점 리포트 출력
@@ -66,6 +74,8 @@ async def run_scenario(scenario_file: str):
         
     except Exception as e:
         print(f"\n❌ 시나리오 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
         with open(paths['log_path'], "a", encoding="utf-8") as f:
             f.write(f"\n❌ 시나리오 중 오류 발생: {e}\n")
 

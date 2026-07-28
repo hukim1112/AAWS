@@ -8,9 +8,11 @@ from app.prompts import NAVIGATOR_SYSTEM_PROMPT
 from app.tools import tools_navigator
 from .utils import dynamic_response_format
 
-def create_navigator_agent(model_name: str = "google_genai:gemini-2.5-pro", temperature: float = 0.1):
+from app.utils import get_llm
+
+def create_navigator_agent(model_name: str = "gemini-2.5-pro", temperature: float = 0.1):
     """구조화된 정보 수집 및 탐색용 에이전트 생성"""
-    nav_model = init_chat_model(model_name, temperature=temperature)
+    nav_model = get_llm(model_name, temperature=temperature)
     nav_checkpointer = InMemorySaver()
     
     agent = create_agent(

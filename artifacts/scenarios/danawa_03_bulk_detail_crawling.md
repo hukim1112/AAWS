@@ -8,8 +8,10 @@ expected_schema:
   items:
     product_name: string
     price: integer
-    switch_type: string
-    connection_type: string
+    switch_type:
+      type: [string, "null"]
+    connection_type:
+      type: [string, "null"]
     review_count: integer
 evaluation_criteria:
   navigator_strategy: 목록 페이지의 페이지네이션 방식과 개별 상품 상세 페이지의 DOM 구조를 모두 파악하는 '2단계(List -> Detail) Blueprint'를 설계해야 함.
@@ -31,4 +33,4 @@ evaluation_criteria:
 - connection_type: 연결 방식 (예: '유선', '무선', '블루투스' 등)
 - review_count: 상품평(리뷰) 개수 (숫자만)
 
-결과물은 'danawa_03_bulk_detail_crawling.json' 파일에 배열 형태로 저장하세요. 다나와는 동적 로딩과 봇 차단 로직이 있을 수 있으므로, 에이전트는 코드에 적절한 예외 처리(try-except)와 지연 시간(sleep/wait)을 반드시 포함해야 합니다.
+결과물은 지정된 경로에 JSON 파일 배열 형태로 저장하세요. 다나와는 동적 로딩과 봇 차단 로직이 있을 수 있으므로, 에이전트는 코드에 적절한 예외 처리(try-except)와 지연 시간(sleep/wait)을 반드시 포함해야 합니다.

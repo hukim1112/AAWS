@@ -5,20 +5,54 @@ from langchain.tools import tool
 from .common import ARTIFACT_DIR
 
 @tool(parse_docstring=True)
-def read_code_file(filepath: str, start_line: int = 1, end_line: int = None) -> str:
-    """파일 내용을 줄 번호와 함께 읽어옵니다.
+def read_file(filepath: str, start_line: int = 1, end_line: int = None, max_display_lines: int = 100) -> str:
+    """파이썬 소스 코드(.py) 및 수집 결과 데이터 파일(.json, .md, .txt 등)의 내용을 줄 번호와 함께 직접 열람합니다.
+    컨텍스트 과부하를 방지하기 위해 end_line 미지정 시 기본 100줄로 자동 제한됩니다.
     
     Args:
-        filepath: 읽을 파일명 (artifacts/code 폴더 기준)
-        start_line: 시작 줄
-        end_line: 끝 줄
+        filepath: 읽을 파일 경로 (절대 경로 또는 artifacts/code 내 파일명)
+        start_line: 시작 줄 (기본 1)
+        end_line: 끝 줄 (미지정 시 start_line부터 최대 max_display_lines줄)
+        max_display_lines: 1회 최대 표시 라인 수 (기본 100)
     """
-    sf = os.path.join(ARTIFACT_DIR, os.path.basename(filepath))
-    if not os.path.exists(sf): return "[Error] 존재하지 않는 파일입니다."
-    with open(sf, "r", encoding="utf-8") as f: lines = f.readlines()
-    end = end_line if end_line else len(lines)
-    start = max(1, start_line)
-    return "\n".join([f"{i+1:03d} | {lines[i].rstrip()}" for i in range(start-1, min(end, len(lines)))])
+    if os.path.exists(filepath):
+        sf = filepath
+    else:
+        sf = os.path.join(ARTIFACT_DIR, os.path.basename(filepath))
+        
+    if not os.path.exists(sf):
+        return f"[Error] 존재하지 않는 파일 경로입니다: {filepath}"
+        
+    try:
+        with open(sf, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        total_lines = len(lines)
+        start = max(1, start_line)
+        
+        # end_line 미지정 시 기본 max_display_lines 제한 적용 (컨텍스트 폭발 방지)
+        if end_line is None:
+            end = min(start + max_display_lines - 1, total_lines)
+        else:
+            end = min(end_line, total_lines)
+            
+        displayed = [f"{i+1:03d} | {lines[i].rstrip()}" for i in range(start - 1, end)]
+        content_body = "\n".join(displayed)
+        
+        # 메타 정보 헤더 및 푸터 구성
+        header = f"[📄 파일 정보] 경로: {os.path.basename(sf)} | 전체: {total_lines:,}줄 중 {start}~{end}줄 표시 (남은 줄: {max(0, total_lines - end):,}줄)\n" + ("=" * 70) + "\n"
+        
+        footer = "\n" + ("=" * 70)
+        if end < total_lines:
+            next_start = end + 1
+            next_end = min(end + max_display_lines, total_lines)
+            footer += f"\n⚠️ [대용량 안내] 전체 {total_lines:,}줄 중 일부만 출력되었습니다."
+            footer += f"\n▶️ 다음 구간 열람 호출: start_line={next_start}, end_line={next_end}"
+            footer += f"\n▶️ 끝부분 열람 호출: start_line={max(1, total_lines - max_display_lines + 1)}, end_line={total_lines}"
+            
+        return header + content_body + footer
+    except Exception as e:
+        return f"[Error] 파일 읽기 실패: {e}"
 
 @tool(parse_docstring=True)
 def edit_code_file(filepath: str, start_line: int, end_line: int, new_content: str) -> str:
@@ -39,25 +73,15 @@ def edit_code_file(filepath: str, start_line: int, end_line: int, new_content: s
 
 @tool(parse_docstring=True)
 def create_new_file(filepath: str, content: str) -> str:
-    """파이썬 또는 텍스트 파일을 새로 완전히 생성합니다.
+    """파이썬 코드 또는 JSON, Markdown, CSV 등 임의의 텍스트 파일을 새로 완전히 생성합니다.
     
     Args:
        filepath: 파일명
-       content: 담길 코드 원문
+       content: 담길 코드 원문 또는 텍스트
     """
     with open(os.path.join(ARTIFACT_DIR, os.path.basename(filepath)), "w", encoding="utf-8") as f:
         f.write(content)
     return f"[Success] {filepath} 생성"
-
-@tool(parse_docstring=True)
-def write_text_file(filepath: str, content: str) -> str:
-    """JSON, Markdown, CSV 등 텍스트 문서를 작성합니다 (create_new_file 동일 스펙).
-    
-    Args:
-        filepath: 파일명
-        content: 파일에 기록할 텍스트 내용
-    """
-    return create_new_file.invoke({"filepath":filepath, "content":content})
 
 @tool(parse_docstring=True)
 def run_python_script(filepath: str, script_args: str = "") -> str:

@@ -7,16 +7,18 @@ expected_schema:
   type: array
   items:
     repo_name: string
-    description: string
-    language: string
+    description:
+      type: [string, "null"]
+    language:
+      type: [string, "null"]
     stars_today: integer
     total_stars: integer
     forks: integer
 evaluation_criteria:
-  navigator_strategy: GitHub Trending 페이지는 JavaScript로 동적 렌더링되므로 wait_seconds를 적절히 설정하여
-    get_page_structure로 DOM을 분석해야 함.
-  coder_strategy: 'stars_today' 값에서 숫자만 추출하고 (예:"1,234 stars today" → 1234),
-    language가 없는 레포도 안전하게 처리(null)해야 함.
+  navigator_strategy: >
+    GitHub Trending 페이지의 렌더링 방식(Static SSR / Dynamic CSR)을 파악하고 적절한 DOM 분석 도구 및 셀렉터를 탐색해야 함.
+  coder_strategy: >
+    stars_today 값에서 숫자만 추출하고 (예: 1,234 stars today -> 1234), language나 description이 없는 경우 안전하게 null로 처리해야 함.
 ---
 
 # 시나리오: github_01_trending_scraping
@@ -31,4 +33,4 @@ GitHub Trending 페이지(https://github.com/trending)에서 오늘의 인기 �
 - total_stars: 전체 스타 수 (숫자만)
 - forks: 포크 수 (숫자만)
 
-결과물은 'github_01_trending_scraping.json' 파일에 배열 형태로 저장하세요.
+결과물은 지정된 경로에 JSON 파일 배열 형태로 저장하세요.

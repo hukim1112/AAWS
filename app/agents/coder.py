@@ -8,9 +8,11 @@ from app.schemas import SeniorCoderContext
 from app.prompts import CODER_SYSTEM_PROMPT
 from app.tools import tools_coder, ARTIFACT_DIR
 
-def create_coder_agent(model_name: str = "google_genai:gemini-3.5-flash", temperature: float = 0.2):
+from app.utils import get_llm
+
+def create_coder_agent(model_name: str = "gemini-3.5-flash", temperature: float = 0.2):
     """데이터 청사진을 코드로 제작/수행하는 Coder 에이전트 생성"""
-    model = init_chat_model(model_name, temperature=temperature)
+    model = get_llm(model_name, temperature=temperature)
     checkpointer = InMemorySaver()
     
     # artifacts 폴더 전체 컨텍스트용 검색 미들웨어
