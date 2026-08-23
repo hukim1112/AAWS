@@ -4,7 +4,7 @@
 
 scenarios:
   # ── Level 1 ──
-  # - quotes_01_pagination.md             # 정적 사이트 다중 페이지 수집 (100점 PASS 완료)
+  - quotes_01_pagination.md             # 정적 사이트 다중 페이지 수집
   # - quotes_02_tag_filter.md           # 태그 필터링 기반 수집
 
   # ── Level 2 ~ 2.5 ──
@@ -12,13 +12,13 @@ scenarios:
   # - ajax_02_api_reverse_engineering.md # 숨겨진 백엔드 API 역공학 (100점 PASS 완료)
 
   # ── Level 3 ──
-  - github_01_trending_scraping.md    # 실제 동적 사이트 (재검증 대상 1)
+  # - github_01_trending_scraping.md    # 실제 동적 사이트 (재검증 대상 1)
   # - quotes_03_multi_step_crawling.md  # 복합 다단계 크롤링 로직
 
   # ── Level 4 ~ 4.5 ──
-  - danawa_01_filter_search.md        # AJAX + 필터 UI (재검증 대상 2)
+  # - danawa_01_filter_search.md        # AJAX + 필터 UI (재검증 대상 2)
   # - danawa_02_deep_table_parsing.md   # 중첩 테이블 + 동적 버튼
 
   # ── Level 5 (최고 난이도) ──
-  - danawa_03_bulk_detail_crawling.md # 2단계(목록→상세) 대량 수집 (재검증 대상 3)
+  # - danawa_03_bulk_detail_crawling.md # 2단계(목록→상세) 대량 수집 (재검증 대상 3)
 

@@ -43,3 +43,4 @@ agentql
 playwright
 streamlit
 crawl4ai
+duckduckgo_search>=8.1.1
