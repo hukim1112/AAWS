@@ -5,11 +5,11 @@ cd "$(dirname "$0")"
 
 echo "🚀 Github Codespaces 환경 전체 설치를 시작합니다..."
 
-# 1. 시스템 패키지 업데이트 및 필요한 모든 시스템 패키지 한번에 설치
-# (Yarn GPG 키 만료 경고를 무시하기 위해 --allow-releaseinfo-change 사용)
+# 1. Yarn GPG 키 만료 문제 우회 후 시스템 패키지 설치
 echo "🔄 시스템 패키지 업데이트 및 설치 중..."
-sudo apt-get update -o Acquire::AllowInsecureRepositories=true 2>/dev/null || true
-sudo apt-get install -y \
+sudo rm -f /etc/apt/sources.list.d/yarn.list
+sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     xvfb x11vnc fluxbox novnc websockify \
     fonts-nanum fonts-nanum-coding fonts-nanum-extra \
     fontconfig locales
@@ -19,7 +19,6 @@ echo "🔤 폰트 캐시 갱신 및 한국어 로케일 설정 중..."
 sudo fc-cache -fv
 sudo sed -i 's/# ko_KR.UTF-8/ko_KR.UTF-8/' /etc/locale.gen
 sudo locale-gen
-sudo update-locale LANG=ko_KR.UTF-8
 
 # 3. Python 의존성 설치 (requirements.txt가 있을 경우)
 if [ -f "requirements.txt" ]; then
