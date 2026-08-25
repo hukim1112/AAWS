@@ -7,12 +7,14 @@
 
 ## 📢 v2.0 업데이트 안내 (2026.08)
 
-최신 AI 에이전트 생태계에 맞춰 아키텍처와 라이브러리를 전면 현대화했습니다.
+최신 AI 에이전트 생태계에 맞춰 아키텍처와 라이브러리를 전면 개편했습니다.
 
-- **아키텍처**: FastAPI 백엔드(`:8000`) + Chainlit UI(`:8080`) 2-Process 분리
-- **브라우저 제어**: `PlaywrightManager` CDP 공유 싱글턴 도입 (세션/쿠키 연속성 유지)
-- **최신 스택**: LangChain 1.3+ / LangGraph 1.2+ / Python 3.12 지원
-- **환경 구축**: Codespaces / noVNC(`:6080`) 지원 및 `install/install_all.sh` 원클릭 설치
+| 구분 | v1.0 (Legacy) | v2.0 (Current) |
+| :--- | :--- | :--- |
+| **실행 구조** | Gradio 기반 단일 프로세스 | **FastAPI 백엔드(`:8000`) + Chainlit UI(`:8080`) 2-Process 분리** |
+| **브라우저 제어** | 개별 프로세스 실행 (세션 단절) | **`PlaywrightManager` CDP 공유 싱글턴 (세션/쿠키 연속성 유지)** |
+| **기술 스택** | LangChain 0.1~0.2 구버전 | **LangChain 1.3+ / LangGraph 1.2+ / Python 3.12 지원** |
+| **환경 구축** | 수동 개별 환경 설정 | **`install/install_all.sh` 원클릭 자동 설치 + noVNC(`:6080`) 지원** |
 
 > 💡 **v1.0 (구버전) 코드가 필요한 경우:**  
 > 학생용: `git checkout v1-legacy-main` | 강사용: `git checkout v1-legacy-instructor`
