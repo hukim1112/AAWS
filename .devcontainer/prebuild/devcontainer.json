@@ -1,12 +1,15 @@
 {
-    "name": "AAWS - AI Agent Web Scraper",
-    "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+    "name": "AAWS - Prebuild (Dockerfile 방식)",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "../.."
+    },
 
     "features": {
         "ghcr.io/devcontainers/features/node:1": {}
     },
 
-    "postCreateCommand": "bash install/install_all.sh",
+    "postCreateCommand": "bash install/post_create.sh",
 
     "forwardPorts": [8000, 8080, 6080],
     "portsAttributes": {

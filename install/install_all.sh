@@ -40,10 +40,14 @@ chmod +x install_novnc.sh
 chmod +x install_hangul.sh
 chmod +x ../start_vnc.sh
 
-# 6. .env 파일 생성 (.env.example 복사)
+# 6. .env 파일 생성 (.env.example 복사 + Chainlit 시크릿 자동 생성)
 if [ ! -f "../.env" ]; then
     cp ../.env.example ../.env
+    # Chainlit JWT 인증 시크릿 자동 생성
+    SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
+    sed -i "s/your_chainlit_secret_here/$SECRET/" ../.env
     echo "📄 .env 파일이 생성되었습니다. API 키를 설정해 주세요."
+    echo "🔑 CHAINLIT_AUTH_SECRET이 자동 생성되었습니다."
 else
     echo "📄 .env 파일이 이미 존재합니다. 덮어쓰지 않습니다."
 fi
