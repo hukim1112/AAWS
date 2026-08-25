@@ -142,22 +142,24 @@ AAWS/
 
 ## ▶️ 실시간 서빙 및 채팅 UI 가동 가이드
 
-노트북 학습이 완료되면, 에이전트 팀을 실제 웹 채팅 UI로 구동합니다.
+노트북 학습이 완료되면, 에이전트 팀을 실제 웹 채팅 UI로 구동합니다. **터미널 2개**를 열어 백엔드와 프론트엔드를 각각 실행하세요.
 
-### 1. 백엔드 서버 (FastAPI) 가동
+### 1. 백엔드 서버 (FastAPI) 가동 — 터미널 ①
 ```bash
 python app/server.py --port 8000
 ```
-* 서버 실행 후 `http://localhost:8000/docs`에서 에이전트 API 상태를 확인할 수 있습니다.
+* 에이전트 API 백엔드가 `:8000`에서 서빙됩니다.
+* `http://localhost:8000/docs`에서 API 상태를 확인할 수 있습니다.
 
-### 2. Chainlit 채팅 UI 가동 (권장)
+### 2. Chainlit 채팅 UI 가동 — 터미널 ②
 ```bash
-chainlit run app/chainlit_ui.py -w --port 8000
+chainlit run app/chainlit_ui.py -w --port 8080
 ```
-* 웹 브라우저에서 `http://localhost:8000`에 접속하여 에이전트를 선택하고 대화합니다.
+* 웹 브라우저에서 `http://localhost:8080`에 접속하여 에이전트를 선택하고 대화합니다.
 * 로그인: `user` / `1234`
+* Chainlit UI는 내부적으로 `:8000`의 FastAPI 서버에 API 요청을 보내므로, **반드시 서버를 먼저 실행**해야 합니다.
 
-### 3. 터미널 테스트 CLI
+### 3. 터미널 테스트 CLI (선택)
 ```bash
 python app/client.py
 ```

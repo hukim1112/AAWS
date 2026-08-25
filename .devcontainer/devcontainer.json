@@ -8,10 +8,14 @@
 
     "postCreateCommand": "bash install/install_all.sh",
 
-    "forwardPorts": [8000, 6080],
+    "forwardPorts": [8000, 8080, 6080],
     "portsAttributes": {
         "8000": {
-            "label": "Agent Server (FastAPI / Chainlit)",
+            "label": "FastAPI Agent Server (Backend API)",
+            "onAutoForward": "notify"
+        },
+        "8080": {
+            "label": "Chainlit Chat UI (Frontend)",
             "onAutoForward": "notify"
         },
         "6080": {
