@@ -1,0 +1,21 @@
+# 🎯 Scraper 에이전트 시나리오 평가 설정 파일 (evaluate_config.yaml)
+# 실행하려는 시나리오의 주석(#)을 해제하여 활성화하세요.
+# 실행 명령어: python -m evaluate.run_scraper_scenarios
+
+scenarios:
+  # ── Level 1 (정적 다중 페이지 & 태그 필터링) ──
+  - quotes_01_pagination.md
+  # - quotes_02_tag_filter.md
+
+  # ── Level 1.5 ~ 2.5 (동적 AJAX 대기 & 백엔드 API 역공학) ──
+  # - ajax_01_playwright_wait.md
+  # - ajax_02_api_reverse_engineering.md
+
+  # ── Level 3 (실시간 외부 사이트 & 다단계 수집) ──
+  # - github_01_trending_scraping.md
+  # - quotes_03_multi_step_crawling.md
+
+  # ── Level 4 ~ 5 (다나와 복합 필터, 테이블 파싱 & 100개 대량 수집) ──
+  # - danawa_01_filter_search.md
+  # - danawa_02_deep_table_parsing.md
+  # - danawa_03_bulk_detail_crawling.md

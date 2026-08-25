@@ -1,0 +1,62 @@
+# ===============================================================================
+# agent-harness-lab .gitignore
+# ===============================================================================
+
+# ── Byte-compiled / optimized / DLL files ──
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ── Environments & Secrets ──
+.env
+.venv
+venv/
+ENV/
+env/
+
+# ── Databases & Caching ──
+*.db
+*.db-journal
+*.sqlite3
+
+# ── Logs ──
+*.log
+
+# ── Task tracking & State ──
+task.md
+task_state.json
+TASK.md
+
+# ── Jupyter Notebook ──
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ── IDEs ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Test / Experiment residues ──
+samples/
+scratch/
+sandbox/
+output/
+
+# ── Chainlit runtime files ──
+.files/
+
+# ── Agent artifacts (에이전트가 생성하는 런타임 산출물) ──
+artifacts/runs/
+artifacts/data/
+artifacts/screenshots/
+artifacts/temporary/
+
+# ── Browser automation temp files ──
+bu_cdp_*/
+
+# ── OS generated files ──
+.DS_Store
+Thumbs.db
+desktop.ini
