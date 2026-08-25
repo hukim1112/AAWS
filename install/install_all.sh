@@ -27,9 +27,9 @@ if [ -f "requirements.txt" ]; then
     
     # 4. Chromium 브라우저 및 시스템 의존성 설치
     echo "🌐 Playwright Chromium 브라우저 설치 중..."
-    playwright install chromium
+    python -m playwright install chromium
     echo "📦 Chromium 시스템 의존성 설치 중..."
-    sudo playwright install-deps chromium
+    sudo env "PATH=$PATH" python -m playwright install-deps chromium
 else
     echo "⚠️ requirements.txt 파일을 찾을 수 없어 Python 패키지 설치를 건너뜁니다."
 fi

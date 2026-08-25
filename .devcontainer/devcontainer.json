@@ -1,6 +1,6 @@
 {
     "name": "AAWS - AI Agent Web Scraper",
-    "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
+    "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
 
     "features": {
         "ghcr.io/devcontainers/features/node:1": {}
