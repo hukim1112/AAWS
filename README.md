@@ -5,6 +5,20 @@
 
 ---
 
+## 📢 v2.0 업데이트 안내 (2026.08)
+
+최신 AI 에이전트 생태계에 맞춰 아키텍처와 라이브러리를 전면 현대화했습니다.
+
+- **아키텍처**: FastAPI 백엔드(`:8000`) + Chainlit UI(`:8080`) 2-Process 분리
+- **브라우저 제어**: `PlaywrightManager` CDP 공유 싱글턴 도입 (세션/쿠키 연속성 유지)
+- **최신 스택**: LangChain 1.3+ / LangGraph 1.2+ / Python 3.12 지원
+- **환경 구축**: Codespaces / noVNC(`:6080`) 지원 및 `install/install_all.sh` 원클릭 설치
+
+> 💡 **v1.0 (구버전) 코드가 필요한 경우:**  
+> 학생용: `git checkout v1-legacy-main` | 강사용: `git checkout v1-legacy-instructor`
+
+---
+
 ## 🔍 프로젝트 소개
 
 **AAWS (AI Agent Web Scraper)** 는 LLM 기반 에이전트가 웹 탐색·분석·데이터 수집을 자율적으로 수행하는 시스템을 설계하고 구현하는 핸즈온 프로젝트입니다.
