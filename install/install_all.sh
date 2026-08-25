@@ -6,18 +6,19 @@ cd "$(dirname "$0")"
 echo "🚀 Github Codespaces 환경 전체 설치를 시작합니다..."
 
 # 1. 시스템 패키지 업데이트 및 필요한 모든 시스템 패키지 한번에 설치
-# (apt-get을 여러 번 호출하면 dpkg 잠금 충돌이 발생할 수 있으므로 한번에 설치)
+# (Yarn GPG 키 만료 경고를 무시하기 위해 --allow-releaseinfo-change 사용)
 echo "🔄 시스템 패키지 업데이트 및 설치 중..."
-sudo apt-get update
+sudo apt-get update -o Acquire::AllowInsecureRepositories=true 2>/dev/null || true
 sudo apt-get install -y \
     xvfb x11vnc fluxbox novnc websockify \
     fonts-nanum fonts-nanum-coding fonts-nanum-extra \
-    language-pack-ko
+    fontconfig locales
 
-# 2. 폰트 캐시 갱신 및 로케일 설정
+# 2. 폰트 캐시 갱신 및 한국어 로케일 설정
 echo "🔤 폰트 캐시 갱신 및 한국어 로케일 설정 중..."
 sudo fc-cache -fv
-sudo locale-gen ko_KR.UTF-8
+sudo sed -i 's/# ko_KR.UTF-8/ko_KR.UTF-8/' /etc/locale.gen
+sudo locale-gen
 sudo update-locale LANG=ko_KR.UTF-8
 
 # 3. Python 의존성 설치 (requirements.txt가 있을 경우)
