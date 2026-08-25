@@ -52,7 +52,7 @@ bash install_all.sh
 
 ```env
 GOOGLE_API_KEY="your-google-api-key"
-TAVILY_API_KEY="your-tavily-api-key"
+OPENAI_API_KEY="your-openai-api-key"
 DISPLAY=":1"          # 가상 디스플레이(noVNC)에서 GUI 브라우저를 실시간 시청하기 위한 필수 설정
 HEADLESS="true"       # true: headless 모드 / false: headed 모드 (VNC로 시각 확인 시 false)
 ```
