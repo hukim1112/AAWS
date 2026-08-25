@@ -52,14 +52,15 @@ bash install_all.sh
 
 ```env
 GOOGLE_API_KEY="your-google-api-key"
-TAVILY_API_KEY="your-tavily-api-key"
+OPENAI_API_KEY="your-openai-api-key"
 DISPLAY=":1"          # 가상 디스플레이(noVNC)에서 GUI 브라우저를 실시간 시청하기 위한 필수 설정
 HEADLESS="true"       # true: headless 모드 / false: headed 모드 (VNC로 시각 확인 시 false)
 ```
 
-### 🔍 LangSmith 트레이싱 설정 (권장)
+### 🔍 LangSmith 트레이싱 설정 (선택적용)
 
 **[LangSmith](https://smith.langchain.com)** 는 LangChain/LangGraph 에이전트의 실행 흐름을 시각적으로 추적하고 디버깅할 수 있는 공식 모니터링 플랫폼입니다.
+사용을 위해 발급 받은 api key를 .env에 기입하고, LANGCHAIN_TRACING_V2=true 로 세팅합니다.
 
 ```env
 LANGCHAIN_API_KEY="your-langsmith-key"
