@@ -158,6 +158,18 @@ class PlaywrightManager:
         ]
         
         # Playwright가 설치한 chromium 경로도 확인
+        # (~/.cache/ms-playwright/chromium-XXXX/chrome-linux64/chrome)
+        import glob
+        pw_cache_patterns = [
+            os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome"),
+            "/root/.cache/ms-playwright/chromium-*/chrome-linux64/chrome",
+        ]
+        for pattern in pw_cache_patterns:
+            matches = sorted(glob.glob(pattern), reverse=True)
+            if matches:
+                chrome_candidates.insert(0, matches[0])
+                break
+        
         pw_chromium = shutil.which("chromium-browser") or shutil.which("chromium")
         if pw_chromium:
             chrome_candidates.insert(0, pw_chromium)
