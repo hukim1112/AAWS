@@ -115,8 +115,8 @@ class PlaywrightManager:
         
         공식 browser-use Playwright Integration 패턴 적용:
         1. .env 로드 (HEADLESS, DISPLAY 등 환경변수 반영)
-        2. Chrome subprocess 기동 (--remote-debugging-port)
-        3. CDP 엔드포인트 준비 대기
+        2. Playwright 시작 → chromium.executable_path로 Chrome 경로 확보
+        3. Chrome subprocess 기동 (--remote-debugging-port)
         4. Playwright connect_over_cdp()로 연결
         """
         from playwright.async_api import async_playwright
@@ -125,65 +125,39 @@ class PlaywrightManager:
         # 0. .env 로드 — Chrome 기동 전에 HEADLESS, DISPLAY 등 환경변수 반영
         load_dotenv()
         
-        # 1. Chrome을 CDP 디버깅 포트와 함께 기동
-        self._chrome_process = await self._start_chrome_with_cdp(self._cdp_port)
-        
-        # 2. Playwright를 동일 Chrome에 CDP로 연결
+        # 1. Playwright 시작 (Chrome 경로 확보를 위해 먼저 시작)
         self._playwright = await async_playwright().start()
+        
+        # 2. Chrome을 CDP 디버깅 포트와 함께 기동
+        chrome_exe = self._playwright.chromium.executable_path
+        self._chrome_process = await self._start_chrome_with_cdp(
+            self._cdp_port, chrome_exe
+        )
+        
+        # 3. Playwright를 동일 Chrome에 CDP로 연결
         self._browser = await self._playwright.chromium.connect_over_cdp(
             self.cdp_url
         )
         logger.info(f"🔗 PlaywrightManager: Chrome CDP 연결 완료 ({self.cdp_url})")
     
-    async def _start_chrome_with_cdp(self, port: int) -> asyncio.subprocess.Process:
+    async def _start_chrome_with_cdp(
+        self, port: int, chrome_exe: str
+    ) -> asyncio.subprocess.Process:
         """Chrome을 remote debugging 포트와 함께 기동합니다.
-        
-        공식 browser-use Playwright Integration 패턴 + WSL 환경 호환.
-        HEADLESS 환경변수(기본 true)로 headless/headed 모드를 결정합니다.
         
         Args:
             port: CDP 디버깅 포트 번호
+            chrome_exe: Chrome 실행 파일 경로 (Playwright가 제공)
             
         Returns:
             Chrome subprocess Process 인스턴스
         """
         self._user_data_dir = tempfile.mkdtemp(prefix="bu_cdp_")
         
-        # Chrome 실행 경로 탐색 (WSL/Linux 우선)
-        chrome_candidates = [
-            "/usr/bin/chromium-browser",     # Ubuntu/WSL (playwright 설치)
-            "/usr/bin/chromium",             # Debian/Alpine
-            "/usr/bin/google-chrome",        # Google Chrome
-            "/usr/bin/google-chrome-stable", # Google Chrome Stable
-        ]
-        
-        # Playwright가 설치한 chromium 경로도 확인
-        # (~/.cache/ms-playwright/chromium-XXXX/chrome-linux64/chrome)
-        import glob
-        pw_cache_patterns = [
-            os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome"),
-            "/root/.cache/ms-playwright/chromium-*/chrome-linux64/chrome",
-        ]
-        for pattern in pw_cache_patterns:
-            matches = sorted(glob.glob(pattern), reverse=True)
-            if matches:
-                chrome_candidates.insert(0, matches[0])
-                break
-        
-        pw_chromium = shutil.which("chromium-browser") or shutil.which("chromium")
-        if pw_chromium:
-            chrome_candidates.insert(0, pw_chromium)
-        
-        chrome_exe = None
-        for path in chrome_candidates:
-            if os.path.exists(path):
-                chrome_exe = path
-                break
-        
-        if not chrome_exe:
+        if not os.path.exists(chrome_exe):
             raise RuntimeError(
-                "❌ Chrome/Chromium을 찾을 수 없습니다. "
-                "'playwright install chromium' 또는 'apt install chromium-browser'를 실행하세요."
+                f"❌ Chrome을 찾을 수 없습니다: {chrome_exe}\n"
+                "'python -m playwright install chromium' 을 실행하세요."
             )
         
         # Headless/Headed 모드 결정 (HEADLESS 환경변수, 기본값: true)
@@ -194,7 +168,7 @@ class PlaywrightManager:
             chrome_exe,
             f"--remote-debugging-port={port}",
             f"--user-data-dir={self._user_data_dir}",
-            "--no-sandbox",              # WSL root 환경 필수
+            "--no-sandbox",              # 컨테이너/WSL 환경 필수
             "--disable-dev-shm-usage",   # Docker/WSL 메모리 제한 대응
             "--no-first-run",
             "--no-default-browser-check",
@@ -224,11 +198,20 @@ class PlaywrightManager:
         process = await asyncio.create_subprocess_exec(
             *chrome_args,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         
         # CDP 엔드포인트 준비 대기
-        await self._wait_for_cdp_ready(port, timeout=15)
+        try:
+            await self._wait_for_cdp_ready(port, timeout=15)
+        except RuntimeError:
+            # Chrome이 시작 실패한 경우 stderr에서 원인 확인
+            stderr_data = await process.stderr.read()
+            stderr_msg = stderr_data.decode(errors="replace").strip()
+            raise RuntimeError(
+                f"❌ Chrome CDP가 15초 내 준비되지 않았습니다 (port: {port})\n"
+                f"Chrome stderr: {stderr_msg[:500]}"
+            )
         logger.info(f"🚀 Chrome CDP 기동 완료 (PID: {process.pid}, port: {port})")
         return process
     
