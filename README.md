@@ -7,15 +7,15 @@
 
 ## 📢 v2.0 업데이트 안내 (2026.08)
 
-최신 AI 에이전트 생태계와 교육 흐름에 맞춰 아키텍처와 라이브러리를 전면 개편했습니다.
+최신 AI 에이전트 아키텍처와 생태계에 맞춰 전면 개편했습니다.
 
 | 구분 | v1.0 (Legacy) | v2.0 (Current) |
 | :--- | :--- | :--- |
 | **웹 UI 프론트엔드** | Streamlit (`app/ui.py`) | **Chainlit (`app/chainlit_ui.py`, 포트 `8080`)** |
+| **에이전트 구성** | Navigator / Coder 분리 구조 | **Scraper 단일 전문 에이전트로 통합** |
+| **Supervisor 패턴** | 단순 메시지 라우팅 방식 | **Blackboard 패턴 (Planning 문서 공유로 정보격차 해소)** |
 | **브라우저 제어** | 개별 Playwright 인스턴스 | **`PlaywrightManager` CDP 공유 싱글턴 (세션/쿠키 유지)** |
 | **에이전트 프레임워크** | LangChain 구버전 파이프라인 | **LangChain 1.3+ / LangGraph 1.2+ / Python 3.12** |
-| **실습 커리큘럼** | `Mission.md` 중심 실습 | **4단계 핸즈온 노트북(`01_~04_`) + 4개 실전 미션** |
-| **환경 구축** | 로컬 WSL 중심 설정 | **GitHub Codespaces 지원 + `install_all.sh` 원클릭 자동화** |
 
 > 💡 **v1.0 (구버전) 코드가 필요한 경우:**  
 > 학생용: `git checkout v1-legacy-main` | 강사용: `git checkout v1-legacy-instructor`
