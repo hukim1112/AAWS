@@ -37,12 +37,15 @@
 
 프롬프트를 아무리 정교하고 장황하게 작성하더라도, 에이전트에게 주어진 도구가 비효율적이거나 저수준(Low-level) 원시 도구뿐이라면 에이전트는 결코 높은 지능을 발휘할 수 없습니다:
 
-- **원시 도구의 한계**: 파일 전체 읽기(`read_file`), 터미널 실행(`bash`)만 주어지면 10,000줄짜리 HTML이나 100MB CSV를 파싱하기 위해 수십 번의 무의미한 스크립트를 짜다가 컨텍스트가 터집니다.
-- **고수준 특화 도구(High-Level Curated Tools)**: 데이터 요약기(`data_profiler`), Pandas 질의기(`data_query`), 셀렉터 분석기(`html_inspect`)처럼 **도메인에 특화된 고차원 도구**를 쥐어주면 에이전트는 1~2회의 도구 호출만으로 즉각 정답에 도달합니다.
+- **원시 도구의 한계**: 파일 전체 읽기(`file_read`), 터미널 원시 실행(`bash_command`)만 주어지면 10,000줄짜리 HTML이나 100MB CSV를 파싱하기 위해 수십 번의 무의미한 스크립트를 짜다가 컨텍스트가 터집니다.
+- **고수준 특화 도구(High-Level Curated Tools)**:
+  - **데이터 분석**: 데이터 요약기(`data_profiler`), Pandas 질의기(`data_query`), 시각화 생성기(`chart_generator`), 대시보드 리포터(`html_report`)
+  - **웹 스크래핑**: DOM 구조 맵 생성기(`extract_dom_skeleton`), 스코프드 HTML 추출기(`get_page_section`), 셀렉터 검증기(`verify_selectors`)
+  이처럼 **도메인에 특화된 고차원 도구**를 쥐어주면 에이전트는 1~2회의 도구 호출만으로 즉각 정답에 도달합니다.
 
 ```
 ❌ 원시 도구 기반 에이전트 (비효율적 루프)
-LLM ➔ [bash: cat huge_data.csv] ➔ (토큰 5만개 낭비) ➔ [bash: python test1.py] ➔ 에러 ➔ [bash: python test2.py]
+LLM ➔ [bash_command: cat huge_data.csv] ➔ (토큰 5만개 낭비) ➔ [bash_command: python test1.py] ➔ 에러 ➔ [bash_command: python test2.py]
 
 ✅ 도메인 특화 도구 에이전트 (압축된 고지능 루프)
 LLM ➔ [data_profiler("keyboard.csv")] ➔ (요약 통계 10줄 수신) ➔ [chart_generator(...)] ➔ 완료!
@@ -56,23 +59,25 @@ LLM ➔ [data_profiler("keyboard.csv")] ➔ (요약 통계 10줄 수신) ➔ [ch
 1. **주의력 분산(Attention Dispersion)**: 수천 줄의 잡음(CSS, 광고 스크립트, 무관한 메타태그) 속에 핵심 데이터가 파묻혀 LLM이 엉뚱한 셀렉터를 선택함
 2. **환각(Hallucination) 및 비용 폭증**: LLM이 토큰 한계에 부딪혀 중요한 필드를 지어내거나(Hallucination), 턴당 수만 토큰이 소모됨
 
-#### 해결책: 도구 레벨에서 가공된 뷰(Curated View) 제공
+#### 해결책: 도구 레벨에서 가공된 뷰(Curated View) 제공 — `app/tools/navigator.py`
+
+AAWS는 전체 HTML 대신 **DOM 트리 구조를 압축하고 반복 요소를 그룹화하는 `extract_dom_skeleton`**을 제공합니다:
 
 ```python
-# ❌ 안티패턴: raw HTML 전체 반환
-@tool
-def get_page_html(url: str) -> str:
-    response = requests.get(url)
-    return response.text  # 50,000 토큰 낭비!
-
-# ✅ 베스트 프랙티스: DOM 트리 압축 및 핵심 인터랙티브 요소만 선별 반환
-@tool
-def inspect_page_structure(url: str, selector: str = "body") -> str:
-    """페이지의 구조적 뼈대(DOM 요약, 주요 태그 및 클래스 목록)만 압축 추출합니다."""
-    soup = BeautifulSoup(requests.get(url).text, 'html.parser')
-    target = soup.select_one(selector)
-    # 텍스트 길이 제한, 불필요한 script/style 제거 후 20줄 요약 반환
-    return summarize_dom_hierarchy(target, max_depth=3)
+# app/tools/navigator.py (실제 구현)
+@tool(args_schema=ExtractDomSkeletonInput)
+async def extract_dom_skeleton(url: str = "", max_depth: int = 8, sibling_limit: int = 5) -> str:
+    """페이지의 DOM 구조를 태그/클래스 계층 맵으로 요약 추출합니다.
+    - 반복되는 리스트(상품 목록 등)는 그룹화(×개수)하여 50,000 토큰의 HTML을 단 100줄로 압축
+    - 스크래핑에 필수적인 href, src, id 및 data-* 속성만 선별 추출
+    """
+    pm = await PlaywrightManager.get_instance()
+    page = await pm.get_active_page()
+    html_content = await page.content()
+    soup = BeautifulSoup(html_content, 'html.parser')
+    body = soup.find('body')
+    skeleton_lines = _build_skeleton(body, depth=0, max_depth=max_depth, sibling_limit=sibling_limit)
+    return "\n".join(skeleton_lines)
 ```
 
 ---
@@ -83,18 +88,20 @@ LLM은 본질적으로 비결정론적(Probabilistic) 모델이므로, 생성한
 에이전트에게 **"직접 테스트하고 검증할 수 있는 피드백 도구"**를 쥐어주면, 에이전트가 사람의 개입 없이 스스로 에러를 고치는 자가 치유(Self-Healing)가 가능해집니다.
 
 ```python
-# app/tools/analyst.py
-@tool
-def data_query(file_path: str, query: str) -> str:
-    """Pandas DataFrame에 SQL/Python 쿼리를 실행하여 실제 결과를 즉시 검증합니다.
-    에러 발생 시 Traceback을 상세히 반환하여 에이전트가 쿼리를 자동 수정하도록 유도합니다.
+# app/tools/navigator.py (셀렉터 사실 검증)
+@tool(args_schema=VerifySelectorsInput)
+async def verify_selectors(url: str = "", selectors: list[str] = []) -> str:
+    """작성한 CSS 셀렉터가 실제 페이지에서 매칭되는지 사전에 정밀 검증합니다.
+    - 매칭된 개수와 실제 텍스트 샘플(3개)을 반환하여 에이전트가 본 수집 전에 셀렉터를 자체 검증
     """
-    try:
-        df = pd.read_csv(file_path)
-        result = eval_query_safe(df, query)
-        return f"[QUERY SUCCESS]\n- Rows: {len(result)}\n- Preview:\n{result.head(5).to_markdown()}"
-    except Exception as e:
-        return f"[QUERY ERROR: {type(e).__name__}]\n{str(e)}\n쿼리 문법 또는 컬럼명을 확인하고 재시도하세요."
+    pm = await PlaywrightManager.get_instance()
+    page = await pm.get_active_page()
+    # 실제 브라우저 DOM에 쿼리를 실행하여 매칭 결과 피드백 반환
+    results = {}
+    for sel in selectors:
+        elements = await page.query_selector_all(sel)
+        results[sel] = {"count": len(elements), "samples": [await e.inner_text() for e in elements[:3]]}
+    return json.dumps(results, ensure_ascii=False, indent=2)
 ```
 
 ---
@@ -104,11 +111,11 @@ def data_query(file_path: str, query: str) -> str:
 에이전트에게 모든 도구를 전부 주면(God Agent) 도구 선택 확률이 희석되고 역할이 모호해집니다.  
 **역할별로 엄격하게 도구를 격리(Tool Isolation)**해야 전문성이 극대화됩니다:
 
-| 에이전트 | 허용 도구 셋 | 금지 도구 | 부여된 역할 정의 |
+| 에이전트 | 허용 도구 셋 (실제 바인딩 목록) | 금지/격리된 도구 | 부여된 역할 정의 |
 |:---|:---|:---|:---|
-| **👑 Supervisor** | `list_sub_agents`, `invoke_sub_agent`, `get_sub_agent_job_status`, `web_search` | `chart_generator`, `raw_scrape` | 총괄 오케스트레이션 및 최종 사용자 대화 |
-| **🔬 Analyst** | `data_profiler`, `data_query`, `chart_generator`, `excel_writer`, `html_report` | `invoke_sub_agent`, `browser_click` | 데이터 통계 분석, 차트 및 HTML 대시보드 제작 |
-| **🕷️ Scraper** | `fetch_web_page`, `parse_dom_table`, `save_dataset`, `extract_links` | `chart_generator`, `excel_writer` | 웹 데이터 수집 및 정형화(JSON/CSV) 저장 |
+| **👑 Supervisor** (`tools_supervisor`) | • **Planning**: `enter_plan`, `exit_plan`, `task_create`, `task_list`, `task_update`<br/>• **Orchestration**: `list_sub_agents`, `invoke_sub_agent`, `get_sub_agent_job_status`<br/>• **Common**: `file_read`, `file_writer`, `file_edit`, `grep_search`, `glob_search`, `web_search` | `extract_dom_skeleton`, `chart_generator`, `excel_writer` | 총괄 프로젝트 기획, 작업 위임, 최종 사용자 커뮤니케이션 |
+| **🔬 Analyst** (`tools_analyst`) | • **분석**: `data_profiler`, `data_query`, `chart_generator`<br/>• **출력**: `excel_writer`, `html_report`, `file_converter`<br/>• **Common**: `file_read`, `file_writer`, `file_edit`, `grep_search`, `glob_search`, `bash_command` | `invoke_sub_agent`, `extract_dom_skeleton`, `interact_page` | 데이터 통계 분석, 수식 포함 Excel 보고서 작성, 인터랙티브 HTML 대시보드 제작 |
+| **🕷️ Scraper** (`tools_scraper`) | • **L1/L2 네비게이팅**: `extract_dom_skeleton`, `get_page_section`, `verify_selectors`, `interact_page`, `take_screenshot`<br/>• **L3 자율 탐색**: `browse_web`<br/>• **Common/코딩**: `file_writer`, `file_read`, `file_edit`, `bash_command`, `web_fetch`, `web_search`, `grep_search`, `glob_search` | `invoke_sub_agent`, `chart_generator`, `excel_writer` | 웹 DOM 탐색, 동적 대기 및 역공학, 고속 데이터 수집 및 정제 |
 
 > **핵심 교훈**: 도구는 단순한 부가 기능이 아니라 에이전트 지능의 상한선이다. 불필요한 도구를 덜어내고, 고도로 가공된 뷰(Curated View)와 사실 검증 루프를 제공하는 것이 도구 설계의 핵심이다.
 
