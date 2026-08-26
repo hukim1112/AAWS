@@ -30,13 +30,16 @@ else:
 
 import logging
 import json
+import uuid
+from datetime import datetime
 import traceback
 import inspect
 import importlib
 from typing import AsyncGenerator, Optional, Dict, Any, List
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.utils.message_utils import sanitize_text, normalize_content
@@ -76,6 +79,15 @@ class SessionCreate(BaseModel):
 class ResumeInput(BaseModel):
     thread_id: str
     decisions: List[Dict[str, Any]]
+
+class JobSubmitInput(BaseModel):
+    message: str
+    thread_id: Optional[str] = None
+    callback_agent: Optional[str] = "supervisor"
+    callback_thread_id: Optional[str] = None
+
+# --- In-Memory Job Store for Long-Running Background Tasks ---
+job_store: Dict[str, dict] = {}
 
 # --- Router Factory ---
 from contextlib import asynccontextmanager
@@ -117,6 +129,11 @@ app = FastAPI(
     description="Unified Server for Multiple Agents",
     lifespan=lifespan
 )
+
+# --- Static File Serving (artifacts/ 디렉토리를 /artifacts URL로 서빙) ---
+artifacts_dir = os.path.join(project_root, "artifacts")
+os.makedirs(artifacts_dir, exist_ok=True)
+app.mount("/artifacts", StaticFiles(directory=artifacts_dir, html=True), name="artifacts")
 
 # --- Dynamic Agent Loader ---
 async def get_or_load_agent(agent_name: str, app: FastAPI) -> Any:
@@ -248,6 +265,139 @@ async def invoke_agent(agent_name: str, input_data: UserInput, request: Request)
         logger.error(f"Dynamic invocation error in agent '{agent_name}': {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Long-Running Background Job Worker (Event-Driven Reactive Wakeup) ---
+async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInput, app: FastAPI):
+    job = job_store.get(job_id)
+    if not job:
+        return
+    job["status"] = "RUNNING"
+    logger.info(f"⚙️ [Job {job_id}] Started background execution for agent '{agent_name}'")
+
+    try:
+        # 1. 서브에이전트 로드 & 실행
+        agent_executor = await get_or_load_agent(agent_name, app)
+        config = {"configurable": {"thread_id": input_data.thread_id}, "recursion_limit": 100} if input_data.thread_id else {"recursion_limit": 100}
+
+        logging_cfg = load_config("./configs/logging.config", {"logging_enabled": False, "log_path": "./artifacts/agent_audit_trail.json"})
+        hitl_cfg = load_config("./configs/hitl.config", {"hitl_enabled": False})
+        context_obj = AgentContext(
+            logging_enabled=logging_cfg.get("logging_enabled", False),
+            log_path=logging_cfg.get("log_path", "./artifacts/agent_audit_trail.json"),
+            response_mode="chat",
+            hitl_enabled=hitl_cfg.get("hitl_enabled", False),
+            debug_mode=os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+        )
+
+        if input_data.thread_id:
+            add_message(input_data.thread_id, "user", input_data.message)
+
+        result = await agent_executor.ainvoke(
+            {"messages": [("user", input_data.message)]},
+            config=config,
+            context=context_obj
+        )
+        last_message = result["messages"][-1]
+        task_report = sanitize_text(normalize_content(last_message.content))
+
+        if input_data.thread_id:
+            add_message(input_data.thread_id, "assistant", task_report)
+
+        job["status"] = "SUCCESS"
+        job["completed_at"] = datetime.utcnow().isoformat() + "Z"
+        job["result"] = task_report
+        logger.info(f"✅ [Job {job_id}] Sub-agent '{agent_name}' completed successfully")
+
+        # 2. 🌟 Reactive Agent Wakeup: 서브에이전트 완료 즉시 Supervisor 자동 호출 & 후속 작업 수행
+        if input_data.callback_agent:
+            try:
+                cb_agent = input_data.callback_agent
+                cb_thread_id = input_data.callback_thread_id or f"session_{job_id}"
+                logger.info(f"🚀 [Job {job_id}] Triggering reactive wakeup for '{cb_agent}' (Thread: {cb_thread_id})...")
+
+                cb_executor = await get_or_load_agent(cb_agent, app)
+
+                trigger_prompt = (
+                    f"[SYSTEM NOTIFICATION: BACKGROUND TASK COMPLETED]\n"
+                    f"- Job ID: {job_id}\n"
+                    f"- Sub-Agent: {agent_name}\n"
+                    f"- Report Content:\n{task_report}\n\n"
+                    f"[INSTRUCTION FOR SUPERVISOR]\n"
+                    f"위 서브에이전트의 완료 보고서와 생성된 산출물을 바탕으로 다음 작업을 수행하거나 유저에게 답변합니다 "
+                    f"생성된 차트 이미지나 HTML 대시보드가 있다면 UI 렌더링 태그(<Render_HTML>, <Render_Image>, <Render_File>)를 통해 출력 가능합니다."
+                )
+
+                cb_config = {"configurable": {"thread_id": cb_thread_id}, "recursion_limit": 100}
+                add_message(cb_thread_id, "user", trigger_prompt)
+
+                sup_result = await cb_executor.ainvoke(
+                    {"messages": [("user", trigger_prompt)]},
+                    config=cb_config,
+                    context=context_obj
+                )
+                sup_last = sup_result["messages"][-1]
+                sup_response = sanitize_text(normalize_content(sup_last.content))
+                add_message(cb_thread_id, "assistant", sup_response)
+                job["supervisor_response"] = sup_response
+                logger.info(f"🎉 [Job {job_id}] Reactive Wakeup completed! Supervisor produced final response.")
+            except Exception as cb_err:
+                logger.error(f"⚠️ [Job {job_id}] Error during reactive wakeup of '{input_data.callback_agent}': {cb_err}")
+                traceback.print_exc()
+
+    except Exception as e:
+        logger.error(f"❌ [Job {job_id}] Background execution failed: {e}")
+        traceback.print_exc()
+        job["status"] = "FAILED"
+        job["completed_at"] = datetime.utcnow().isoformat() + "Z"
+        job["error"] = str(e)
+
+
+# --- Job Management Endpoints ---
+@app.post("/agents/{agent_name}/jobs")
+async def submit_agent_job(
+    agent_name: str,
+    input_data: JobSubmitInput,
+    background_tasks: BackgroundTasks,
+    request: Request
+):
+    """비동기 백그라운드 작업을 등록하고 job_id를 즉시 반환합니다."""
+    # 에이전트 등록 여부 확인
+    available = [a["name"] for a in api_list_agents() if isinstance(a, dict)]
+    if agent_name not in available:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found. Available: {available}")
+
+    job_id = f"job_{uuid.uuid4().hex[:8]}"
+    created_at = datetime.utcnow().isoformat() + "Z"
+    job_store[job_id] = {
+        "job_id": job_id,
+        "agent_name": agent_name,
+        "status": "SUBMITTED",
+        "created_at": created_at,
+        "completed_at": None,
+        "result": None,
+        "error": None,
+        "supervisor_response": None,
+        "callback_agent": input_data.callback_agent,
+        "callback_thread_id": input_data.callback_thread_id,
+    }
+
+    background_tasks.add_task(_run_agent_job, job_id, agent_name, input_data, request.app)
+    return {"job_id": job_id, "status": "SUBMITTED", "agent_name": agent_name}
+
+
+@app.get("/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    """특정 작업의 진행 상태와 결과(및 Supervisor 후속 보고서)를 조회합니다."""
+    job = job_store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return job
+
+
+@app.get("/jobs")
+async def list_jobs():
+    """모든 백그라운드 작업 목록을 조회합니다."""
+    return list(job_store.values())
 
 @app.post("/agents/{agent_name}/stream")
 async def stream_agent(agent_name: str, input_data: StreamInput, request: Request):

@@ -12,6 +12,7 @@ import sys
 import uuid
 import re
 import json
+import html
 import chainlit as cl
 from chainlit.types import ThreadDict
 from typing import Dict, Any, Optional, List
@@ -25,9 +26,30 @@ from app.client import AsyncAgentClient
 from app.utils.database import ChainlitSQLiteDataLayer, CHAINLIT_DB_PATH
 from app.utils.message_utils import sanitize_text
 
+# Chainlit 세션 파일 디렉토리 사전 생성 (.files 미존재로 인한 [Errno 2] 방지)
+os.makedirs(os.path.join(project_root, ".files"), exist_ok=True)
+
 # ── FastAPI 백엔드 클라이언트 ─────────────────────────────────
 FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
-api_client = AsyncAgentClient(base_url=FASTAPI_BASE_URL)
+api_client = AsyncAgentClient(base_url=FASTAPI_BASE_URL, timeout=600.0)
+
+
+def _resolve_existing_path(path_str: str) -> Optional[str]:
+    """경로를 정규화하고 실제 존재하는지 확인합니다 (WSL/Windows 호환)."""
+    p = path_str.strip().strip("'\"")
+    if os.path.exists(p):
+        return p
+    # C:\... -> /mnt/c/... 변환 시도
+    if re.match(r"^[a-zA-Z]:", p):
+        drive = p[0].lower()
+        wsl_p = f"/mnt/{drive}/" + p[2:].replace("\\", "/").lstrip("/")
+        if os.path.exists(wsl_p):
+            return wsl_p
+    # ./artifacts/... 상대경로 시도
+    rel_p = os.path.join(project_root, p.lstrip("/\\"))
+    if os.path.exists(rel_p):
+        return rel_p
+    return None
 
 
 # ── 1. Chainlit Data Layer (SQLite 기반 사이드바 히스토리) ─────
@@ -225,6 +247,29 @@ async def _collect_hitl_decisions(interrupt_event: dict) -> List[dict]:
     return decisions
 
 
+# ── 7-1. 대시보드 사이드 패널 다시 열기 콜백 ────────────────────
+@cl.action_callback("reopen_dashboard")
+async def on_reopen_dashboard(action: cl.Action):
+    """사용자가 '대시보드 사이드 패널 열기' 버튼을 클릭하면 사이드 패널에 대시보드를 다시 띄웁니다."""
+    payload = action.payload or {}
+    url = payload.get("url")
+    title = payload.get("title", "데이터 분석 대시보드")
+
+    if url:
+        element = cl.CustomElement(
+            name="HtmlDashboard",
+            url=url,
+            mime="application/json",
+            props={"url": url, "title": title, "height": "80vh"},
+            display="side",
+        )
+        await cl.Message(
+            content=f"📊 **[{title}]** 대시보드를 우측 사이드 패널에 다시 열었습니다.\n- [🌐 새 탭에서 전체화면으로 보기]({url})",
+            elements=[element],
+            author="Agent Assistant"
+        ).send()
+
+
 # ── 8. 메시지 처리 (FastAPI SSE 스트리밍 + HITL 연쇄 루프) ────
 @cl.on_message
 async def on_message(message: cl.Message):
@@ -258,19 +303,101 @@ async def on_message(message: cl.Message):
                 active_steps,
             )
 
-        # 3. 이미지 태그 파싱 (<Render_Image>...</Render_Image>)
+        # 3. 미디어 및 파일 태그 파싱 (<Render_Image>, <Render_HTML>, <Render_File> + fallback)
         raw_content = final_message.content or ""
         elements = []
-        image_matches = re.findall(r"<Render_Image>(.*?)</Render_Image>", raw_content)
-        for img_path in image_matches:
-            img_path = img_path.strip()
-            if os.path.exists(img_path):
-                elements.append(cl.Image(name=os.path.basename(img_path), path=img_path, display="inline"))
+        actions = []
+        clean_content = raw_content
 
+        # (1) <Render_Image>...</Render_Image> 처리
+        image_matches = re.findall(r"<Render_Image>(.*?)</Render_Image>", raw_content)
+        for raw_img in image_matches:
+            resolved_p = _resolve_existing_path(raw_img)
+            if resolved_p:
+                elements.append(cl.Image(name=os.path.basename(resolved_p), path=resolved_p, display="inline"))
+            clean_content = clean_content.replace(f"<Render_Image>{raw_img}</Render_Image>", "")
+
+        # (2) 마크다운 이미지 fallback 파싱: ![...](path)
+        md_image_matches = re.findall(r"!\[(.*?)\]\((.*?)\)", clean_content)
+        for alt_text, raw_img in md_image_matches:
+            resolved_p = _resolve_existing_path(raw_img)
+            if resolved_p:
+                elements.append(cl.Image(name=alt_text or os.path.basename(resolved_p), path=resolved_p, display="inline"))
+                # 본문에서 깨지는 마크다운 엑박 태그 제거
+                clean_content = clean_content.replace(f"![{alt_text}]({raw_img})", "")
+
+        # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — CustomElement + iframe)
+        html_matches = re.findall(r"<Render_HTML>(.*?)</Render_HTML>", raw_content)
+        for raw_html in html_matches:
+            resolved_p = _resolve_existing_path(raw_html)
+            if resolved_p:
+                fname = os.path.basename(resolved_p)
+                # artifacts/ 하위 파일이면 FastAPI static URL로 변환
+                # 예: artifacts/keyboard_analysis_dashboard.html → http://localhost:8000/artifacts/keyboard_analysis_dashboard.html
+                rel_path = raw_html.strip().strip("'\"")
+                if rel_path.startswith("artifacts/") or rel_path.startswith("artifacts\\"):
+                    dashboard_url = f"{FASTAPI_BASE_URL}/{rel_path.replace(os.sep, '/')}"
+                else:
+                    # artifacts 외부 파일은 절대 경로에서 artifacts 하위 경로 추출 시도
+                    try:
+                        abs_resolved = os.path.abspath(resolved_p)
+                        artifacts_root = os.path.abspath(os.path.join(project_root, "artifacts"))
+                        if abs_resolved.startswith(artifacts_root):
+                            rel_from_artifacts = os.path.relpath(abs_resolved, os.path.dirname(artifacts_root))
+                            dashboard_url = f"{FASTAPI_BASE_URL}/{rel_from_artifacts.replace(os.sep, '/')}"
+                        else:
+                            dashboard_url = f"{FASTAPI_BASE_URL}/artifacts/{fname}"
+                    except Exception:
+                        dashboard_url = f"{FASTAPI_BASE_URL}/artifacts/{fname}"
+
+                elements.append(cl.CustomElement(
+                    name="HtmlDashboard",
+                    url=dashboard_url,
+                    mime="application/json",
+                    props={"url": dashboard_url, "title": fname, "height": "80vh"},
+                    display="side",
+                ))
+
+                # 패널을 닫은 후에도 원클릭으로 다시 열 수 있는 Action 버튼 추가
+                actions.append(cl.Action(
+                    name="reopen_dashboard",
+                    label=f"📊 {fname} 사이드 패널 열기",
+                    payload={"url": dashboard_url, "title": fname}
+                ))
+
+                clean_content = clean_content.replace(
+                    f"<Render_HTML>{raw_html}</Render_HTML>",
+                    f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> - [새 탭에서 전체화면으로 열기 ↗]({dashboard_url})\n> *(우측 사이드 패널이 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
+                )
+            else:
+                clean_content = clean_content.replace(f"<Render_HTML>{raw_html}</Render_HTML>", "")
+
+        # (4) <Render_File>...</Render_File> 처리 (Excel, CSV 등 다운로드 파일)
+        file_matches = re.findall(r"<Render_File>(.*?)</Render_File>", raw_content)
+        for raw_f in file_matches:
+            resolved_p = _resolve_existing_path(raw_f)
+            if resolved_p:
+                fname = os.path.basename(resolved_p)
+                elements.append(cl.File(name=fname, path=resolved_p))
+                clean_content = clean_content.replace(
+                    f"<Render_File>{raw_f}</Render_File>",
+                    f"\n\n> 📊 **보고서 파일 첨부됨**: `{fname}`\n\n"
+                )
+            else:
+                clean_content = clean_content.replace(f"<Render_File>{raw_f}</Render_File>", "")
+
+        # 본문 텍스트 정리 및 elements/actions 연결
+        final_message.content = clean_content.strip()
         if elements:
             final_message.elements = elements
+        if actions:
+            final_message.actions = actions
 
-        await final_message.send()
+        # 스트리밍된 메시지는 update()로 화면을 갱신해야 elements가 즉시 표시됨
+        if final_message.id:
+            await final_message.update()
+        else:
+            await final_message.send()
 
     except Exception as e:
         await cl.Message(content=f"❌ **에러가 발생했습니다:** {str(e)}").send()

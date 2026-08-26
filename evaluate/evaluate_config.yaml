@@ -4,7 +4,7 @@
 
 scenarios:
   # ── Level 1 (정적 다중 페이지 & 태그 필터링) ──
-  - quotes_01_pagination.md
+  # - quotes_01_pagination.md
   # - quotes_02_tag_filter.md
 
   # ── Level 1.5 ~ 2.5 (동적 AJAX 대기 & 백엔드 API 역공학) ──
@@ -18,4 +18,4 @@ scenarios:
   # ── Level 4 ~ 5 (다나와 복합 필터, 테이블 파싱 & 100개 대량 수집) ──
   # - danawa_01_filter_search.md
   # - danawa_02_deep_table_parsing.md
-  # - danawa_03_bulk_detail_crawling.md
+  - danawa_03_bulk_detail_crawling.md

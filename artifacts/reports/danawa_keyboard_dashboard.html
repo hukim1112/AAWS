@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다나와 키보드 시장 종합 분석 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 1rem;
+        }
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="p-6 md:p-10 min-h-screen">
+    <div class="max-w-7xl mx-auto space-y-8">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between pb-6 border-b border-slate-700/60">
+            <div>
+                <div class="flex items-center gap-3">
+                    <span class="p-2.5 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
+                        <i class="fa-solid fa-keyboard text-2xl"></i>
+                    </span>
+                    <div>
+                        <h1 class="text-3xl font-extrabold tracking-tight text-white">다나와 키보드 시장 종합 분석</h1>
+                        <p class="text-sm text-slate-400 mt-1">인기 키보드 100개 제품 크롤링 기반 브랜드·스위치·가격대 심층 분석 리포트</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center gap-3">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-pulse"></span> 데이터셋 100건 분석 완료
+                </span>
+                <span class="text-xs text-slate-400 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                    <i class="fa-regular fa-calendar mr-1"></i> 2026-08-27
+                </span>
+            </div>
+        </header>
+
+        <!-- KPI Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="card p-5 relative overflow-hidden group hover:border-blue-500/50 transition duration-300">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">총 분석 제품</span>
+                    <span class="p-2 rounded-lg bg-blue-500/10 text-blue-400"><i class="fa-solid fa-boxes-stacked"></i></span>
+                </div>
+                <div class="mt-3">
+                    <span class="text-3xl font-bold text-white">100</span>
+                    <span class="text-sm text-slate-400 ml-1">개</span>
+                </div>
+                <div class="mt-2 text-xs text-blue-400 flex items-center">
+                    <i class="fa-solid fa-tag mr-1"></i> 22개 브랜드 제품군
+                </div>
+            </div>
+
+            <div class="card p-5 relative overflow-hidden group hover:border-emerald-500/50 transition duration-300">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">시장 평균 가격</span>
+                    <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-won-sign"></i></span>
+                </div>
+                <div class="mt-3">
+                    <span class="text-3xl font-bold text-white">80,803</span>
+                    <span class="text-sm text-slate-400 ml-1">원</span>
+                </div>
+                <div class="mt-2 text-xs text-emerald-400 flex items-center">
+                    <i class="fa-solid fa-chart-line mr-1"></i> 중앙값: 62,000원
+                </div>
+            </div>
+
+            <div class="card p-5 relative overflow-hidden group hover:border-amber-500/50 transition duration-300">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">최다 점유 브랜드</span>
+                    <span class="p-2 rounded-lg bg-amber-500/10 text-amber-400"><i class="fa-solid fa-trophy"></i></span>
+                </div>
+                <div class="mt-3">
+                    <span class="text-2xl font-bold text-white">앱코 / 로지텍</span>
+                    <span class="text-sm text-slate-400 ml-1">(각 19개)</span>
+                </div>
+                <div class="mt-2 text-xs text-amber-400 flex items-center">
+                    <i class="fa-solid fa-percent mr-1"></i> 3위 AULA(13개, 독거미 열풍)
+                </div>
+            </div>
+
+            <div class="card p-5 relative overflow-hidden group hover:border-purple-500/50 transition duration-300">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">누적 리뷰 수</span>
+                    <span class="p-2 rounded-lg bg-purple-500/10 text-purple-400"><i class="fa-solid fa-comments"></i></span>
+                </div>
+                <div class="mt-3">
+                    <span class="text-3xl font-bold text-white">6,888</span>
+                    <span class="text-sm text-slate-400 ml-1">개</span>
+                </div>
+                <div class="mt-2 text-xs text-purple-400 flex items-center">
+                    <i class="fa-solid fa-star mr-1"></i> 로지텍 제품군 리뷰 59.7% 점유
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Insights Banner -->
+        <div class="card p-6 bg-gradient-to-r from-blue-950/50 via-slate-900 to-indigo-950/40 border-blue-500/30">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-4">
+                <i class="fa-solid fa-lightbulb text-amber-400"></i> 시장 핵심 분석 인사이트 (Key Takeaways)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+                    <div class="font-semibold text-blue-400 mb-1">1. 브랜드 양극화 및 가성비 강세</div>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        앱코(평균 5.5만)와 AULA 독거미(평균 7.1만)가 5~9만원대 중보급형 기계식을 장악한 반면, 커세어(평균 23.0만)와 RAZER(평균 28.4만)는 프리미엄 게이밍 타깃으로 뚜렷한 시장 분화가 관찰됩니다.
+                    </p>
+                </div>
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+                    <div class="font-semibold text-emerald-400 mb-1">2. 유무선(삼중연결) 프리미엄화</div>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        유선+무선 복합 키보드의 평균 가격은 9.8만원으로 순수 유선(7.7만) 및 순수 무선(7.2만) 대비 27% 높은 가격대를 형성하며 신규 하이엔드/가성비 기계식의 표준 규격으로 자리잡았습니다.
+                    </p>
+                </div>
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+                    <div class="font-semibold text-purple-400 mb-1">3. 저소음/특수축 수요 급상승</div>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        전통적인 청/적/갈축 외에 '저소음 바다축', '저소음 피치축', '마그네틱 자석축' 등 정숙성과 게이밍 퍼포먼스를 겨냥한 커스텀 성향 스위치의 제품 등록이 크게 증가했습니다.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Chart 1: Brand Analysis -->
+            <div class="card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-simple text-blue-400"></i> 주요 브랜드별 제품 수 & 평균 가격(만원)
+                    </h3>
+                </div>
+                <div class="h-72">
+                    <canvas id="brandChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Price Tier Donut -->
+            <div class="card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-emerald-400"></i> 가격대별 점유 비중
+                    </h3>
+                </div>
+                <div class="h-72 flex items-center justify-center">
+                    <canvas id="tierChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 3: Connection Type -->
+            <div class="card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-wifi text-amber-400"></i> 연결 방식별 평균 가격 & 제품 수
+                    </h3>
+                </div>
+                <div class="h-72">
+                    <canvas id="connChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 4: Switch Types -->
+            <div class="card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-purple-400"></i> 주요 스위치/축별 평균 가격(만원)
+                    </h3>
+                </div>
+                <div class="h-72">
+                    <canvas id="switchChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Data Table -->
+        <div class="card p-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-table-list text-blue-400"></i> 키보드 상세 데이터 테이블 (100건)
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-1">검색 및 브랜드별 필터를 통해 원하는 제품 정보를 즉시 탐색할 수 있습니다.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                        <input type="text" id="searchInput" placeholder="제품명 검색..." class="bg-slate-800 text-slate-200 text-xs rounded-lg pl-9 pr-3 py-2 border border-slate-700 focus:outline-none focus:border-blue-500 w-48 md:w-60">
+                    </div>
+                    <select id="brandFilter" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-3 py-2 border border-slate-700 focus:outline-none focus:border-blue-500">
+                        <option value="">모든 브랜드</option>
+                        <option value="로지텍">로지텍</option>
+                        <option value="앱코">앱코</option>
+                        <option value="AULA">AULA (독거미)</option>
+                        <option value="COX">COX</option>
+                        <option value="커세어">커세어</option>
+                        <option value="FL-ESPORTS">FL-ESPORTS</option>
+                        <option value="한성컴퓨터">한성컴퓨터</option>
+                    </select>
+                    <select id="tierFilter" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-3 py-2 border border-slate-700 focus:outline-none focus:border-blue-500">
+                        <option value="">모든 가격대</option>
+                        <option value="보급형 (<5만원)">보급형 (<5만원)</option>
+                        <option value="중급형 (5~15만원)">중급형 (5~15만원)</option>
+                        <option value="프리미엄 (≥15만원)">프리미엄 (≥15만원)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto table-container max-h-96">
+                <table class="w-full text-left text-xs text-slate-300" id="keyboardTable">
+                    <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 border-b border-slate-700">
+                        <tr>
+                            <th scope="col" class="py-3 px-4">No.</th>
+                            <th scope="col" class="py-3 px-4">브랜드</th>
+                            <th scope="col" class="py-3 px-4">제품명</th>
+                            <th scope="col" class="py-3 px-4 text-right">가격 (원)</th>
+                            <th scope="col" class="py-3 px-4">가격대</th>
+                            <th scope="col" class="py-3 px-4">연결 방식</th>
+                            <th scope="col" class="py-3 px-4">스위치 종류</th>
+                            <th scope="col" class="py-3 px-4 text-right">리뷰 수</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800" id="tableBody">
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">1</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F108 PRO 유무선 기계식 치즈 화이트 한글 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">89,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">2</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 K560 축교환 레인보우 무빙 LED 기계식 블랙 (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">28,510</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">126</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="FL-ESPORTS" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">3</td>
+                            <td class="py-3 px-4 font-semibold text-white">FL-ESPORTS</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">FL-ESPORTS NX87HE 민트 블랙 (저소음 스톰축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">98,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 스톰축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">4</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F87 Pro 기계식 다크 올리비아 한글 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">48,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">5</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F108 기계식 라이트 그레이 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">65,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">6</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 KEYS-TO-GO 2 (정품) (그라파이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">86,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">91</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">7</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F87 Pro 유무선 기계식 인디고 블랙 한글 (저소음 피치축 V2)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">67,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 피치축 V2</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">34</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="커세어" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">8</td>
+                            <td class="py-3 px-4 font-semibold text-white">커세어</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CORSAIR 뱅가드 AIR 99 무선 (화이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">370,750</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="커세어" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">9</td>
+                            <td class="py-3 px-4 font-semibold text-white">커세어</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CORSAIR 뱅가드 PRO 96 게이밍</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">198,990</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">7</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">10</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CKM40W 저소음 무선 키보드 마우스 세트 (블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">17,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">24</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="RAZER" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">11</td>
+                            <td class="py-3 px-4 font-semibold text-white">RAZER</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">Razer Huntsman V3 HE Magnetic TKL</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">239,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">12</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MK295 SILENT (정품) (블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">37,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">326</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">13</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F87 Pro V2 유무선 기계식 모던 블랙 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">85,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">14</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F108 유무선 기계식 스카이 블랙 한글 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">82,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">15</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MK250 무선 키보드 마우스 세트</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">25,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">32</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">16</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 ACH105 오피스워커 유무선 기계식 블랙 (저소음 바다소금축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">79,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다소금축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">17</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA S102Pro 유무선 (그레이)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">29,800</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">9</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">18</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 시그니처 MK650 (정품) (그라파이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">79,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">60</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">19</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 시그니처 슬림 MK950 키보드 마우스 세트 (정품) (그래파이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">118,990</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">61</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">20</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 K561 교체축 유무선 블루투스 기계식 블랙 (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">29,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">19</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="프리플로우" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">21</td>
+                            <td class="py-3 px-4 font-semibold text-white">프리플로우</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">프리플로우 archon M1 PRO 2 TKL (메카닉)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">89,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">22</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MX Keys S (정품) (그라파이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">139,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">23</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MX Mechanical (정품) (갈축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">178,980</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">갈축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">48</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="ASUS" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">24</td>
+                            <td class="py-3 px-4 font-semibold text-white">ASUS</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">ASUS ROG AZOTH X 유무선 기계식 (SNOW축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">299,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">SNOW축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">2</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">25</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 K562 교체축 3모드 계산기 유무선 기계식</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">23,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">2</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="Nillkin" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">26</td>
+                            <td class="py-3 px-4 font-semibold text-white">Nillkin</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">Nillkin Cube Pocket (그레이)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">67,280</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">27</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 K120 New (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">11,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1,807</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">28</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MK235 (정품) (키스킨 미포함)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">25,550</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">649</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="커세어" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">29</td>
+                            <td class="py-3 px-4 font-semibold text-white">커세어</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CORSAIR 클리퍼 PRO 미니 60 (화이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">169,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="한성컴퓨터" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">30</td>
+                            <td class="py-3 px-4 font-semibold text-white">한성컴퓨터</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">한성컴퓨터 GK698 OfficeMaster 유무선 (RETRO POINT)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">39,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">58</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="한성컴퓨터" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">31</td>
+                            <td class="py-3 px-4 font-semibold text-white">한성컴퓨터</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">한성컴퓨터 TFG Magnetox 2XF 저소음 (그레이레이니)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">104,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">32</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 Wave Keys + LIFT VERTICAL Combo 무선 키보드 마우스 세트 (그래파이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">134,100</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">25</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="프리플로우" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">33</td>
+                            <td class="py-3 px-4 font-semibold text-white">프리플로우</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">프리플로우 archon M1 PRO 2 MAX (메카닉)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">99,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">34</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 K380S (정품) (스모키블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">30,390</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">166</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="주연테크" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">35</td>
+                            <td class="py-3 px-4 font-semibold text-white">주연테크</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">주연테크 긱스타 GK108FE (봄 꽃비)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">18,800</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">36</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX COS500 무선</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">28,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">4</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">37</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 AF108PRO ABKO x SOAI 콜라보 3모드 기계식 코랄블루 (소복눈축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">79,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">소복눈축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">20</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">38</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F108 유무선 기계식 블러쉬 핑크 한글 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">89,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="SPM" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">39</td>
+                            <td class="py-3 px-4 font-semibold text-white">SPM</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">SPM PL87W 몽돌 유무선 기계식 (블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">56,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">110</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="RAZER" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">40</td>
+                            <td class="py-3 px-4 font-semibold text-white">RAZER</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">Razer Huntsman V3 Pro TKL 8K KR (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">329,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">5</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="커세어" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">41</td>
+                            <td class="py-3 px-4 font-semibold text-white">커세어</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CORSAIR K70 RGB PRO (갈축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">212,950</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">갈축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">119</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">42</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F108 유무선 기계식 올리비아 화이트 한글 (저소음 솜사탕축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">82,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 솜사탕축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">53</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">43</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F87 Pro 기계식 라이트 올리비아 한글 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">42,800</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">11</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">44</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F87 Pro 유무선 기계식 올리비아 화이트 한글 (저소음 피치축 V2)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">67,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 피치축 V2</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">35</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">45</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F87 Pro V2 유무선 기계식 샌드 베이지 (저소음 바다축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">85,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 바다축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">46</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 KN30BT 블루투스 유무선 무접점</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">109,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">20</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="CHERRY" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">47</td>
+                            <td class="py-3 px-4 font-semibold text-white">CHERRY</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CHERRY XTRFY K37 유무선 (화이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">58,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">48</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CK420 교체축 레인보우 LED 게이밍 기계식 화이트 (갈축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">29,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">갈축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">14</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">49</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 AK998 8K OTEMU 특주축 기계식 스카이 블루 (멜론축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">57,990</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">멜론축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">3</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="AULA" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">50</td>
+                            <td class="py-3 px-4 font-semibold text-white">AULA</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">AULA F108 PRO 유무선 기계식 오로라 블랙 한글 (경해축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">96,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">경해축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">43</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">51</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 AK94BT 유무선 기계식 스카이블루 (저소음 피치축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">79,380</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 피치축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">52</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 AK87 슬림 프로 3모드 로우 프로파일 유무선 기계식 (햇살축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">75,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">햇살축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">53</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX COS10 유선 키보드 마우스 세트</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">8,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">4</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="CHERRY" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">54</td>
+                            <td class="py-3 px-4 font-semibold text-white">CHERRY</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CHERRY XTRFY MX 8.2 PRO TMR 8K 유무선</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">207,200</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="지클릭커" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">55</td>
+                            <td class="py-3 px-4 font-semibold text-white">지클릭커</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">지클릭커 오피스프로 WK35 (그린)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">29,800</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">56</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CKM510 게이밍 키보드 마우스 세트</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">18,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">2</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="커세어" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">57</td>
+                            <td class="py-3 px-4 font-semibold text-white">커세어</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CORSAIR K70 MAX RGB MGX 게이밍 기계식 (마그네틱축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">287,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">마그네틱축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">72</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">58</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CK01 TKL (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">31,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">10</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">59</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 AK998 8K OTEMU 특주축 기계식 블랙 (저소음 피치축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">65,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 피치축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">3</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">60</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CK01 PBT 이색사출 사이드 RGB 기계식 키보드 (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">31,500</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">5</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">61</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CK87 크림블루 게이트론 LED 게이밍 기계식 (갈축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">42,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">갈축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">11</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="글로리어스" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">62</td>
+                            <td class="py-3 px-4 font-semibold text-white">글로리어스</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">글로리어스 GMBK 75%</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">59,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">63</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CY104K V2 카일 광축 V2 게이밍 블랙 (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">65,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">64</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 HACKER KM700 게이밍 키보드 마우스 장패드 세트 (블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">28,500</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">8</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">65</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 K561 교체축 유무선 블루투스 기계식 화이트 (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">29,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">10</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">66</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 KM580 저소음 기계식 키보드 마우스 세트 (블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">76,990</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="STCOM" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">67</td>
+                            <td class="py-3 px-4 font-semibold text-white">STCOM</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">STCOM 키스톰 KS-KM100W 키보드 마우스 세트</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">16,600</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">68</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX COS600 무선</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">26,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="FL-ESPORTS" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">69</td>
+                            <td class="py-3 px-4 font-semibold text-white">FL-ESPORTS</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">FL-ESPORTS NX108 유무선 기계식 크림 핑크 (저소음 파도축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">82,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">저소음 파도축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">7</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">70</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 MK108 저소음 멤브레인 (블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">18,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">77</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">71</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 MK87 저소음 텐키리스 멤브레인 (오트밀)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">17,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">13</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="KiiBOOM" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">72</td>
+                            <td class="py-3 px-4 font-semibold text-white">KiiBOOM</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">KiiBOOM Phantom 81 V3 유무선 기계식 (핑크)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">259,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">73</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 KN35BT DRT 8K 염료승화 블루투스 유무선 무접점 (베른)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">109,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">7</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">74</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 HACKER K660 축교환 완전방수 게이밍 카일 광축 옐로우 (클릭)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">65,990</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">클릭</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">49</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">75</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 K560 축교환 레인보우 무빙 LED 기계식 화이트 (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">30,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">34</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="마이크로닉스" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">76</td>
+                            <td class="py-3 px-4 font-semibold text-white">마이크로닉스</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">마이크로닉스 MANIC PAMPAM 팜레스트 키보드 손목받침대</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">8,630</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">기타/미표기</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">59</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="FL-ESPORTS" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">77</td>
+                            <td class="py-3 px-4 font-semibold text-white">FL-ESPORTS</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">FL-ESPORTS NX108HE 민트 블랙 (레몬축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">98,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">레몬축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="FL-ESPORTS" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">78</td>
+                            <td class="py-3 px-4 font-semibold text-white">FL-ESPORTS</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">FL-ESPORTS NX108HE 네온 그레이 (레몬축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">98,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">레몬축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">79</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX 카일 정품 광축 스위치 (5+5개, 클릭/리니어)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">3,990</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">기타/미표기</td>
+                            <td class="py-3 px-4 text-slate-300">5+5개, 클릭/리니어</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">18</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">80</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MK275 (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">30,360</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">291</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="QSENN" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">81</td>
+                            <td class="py-3 px-4 font-semibold text-white">QSENN</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">QSENN MK210 무선 키보드 마우스 세트 (블랙, 키스킨 포함)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">14,780</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">183</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="커세어" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">82</td>
+                            <td class="py-3 px-4 font-semibold text-white">커세어</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">CORSAIR K70 RGB CORE 게이밍 기계식 (블랙)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">138,990</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">23</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="darkFlash" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">83</td>
+                            <td class="py-3 px-4 font-semibold text-white">darkFlash</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">darkFlash CK104 무선 기계식 키보드 마우스 세트 블랙 (적축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">34,490</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">적축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">4</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="프리플로우" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">84</td>
+                            <td class="py-3 px-4 font-semibold text-white">프리플로우</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">프리플로우 archon AK47 유무선 기계식 (마에스트로)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">57,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">74</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="앱코" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">85</td>
+                            <td class="py-3 px-4 font-semibold text-white">앱코</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">앱코 K26 3모드 무선 QMK VIA</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">43,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">4</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="QSENN" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">86</td>
+                            <td class="py-3 px-4 font-semibold text-white">QSENN</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">QSENN MK128 사일런트 무선 키보드 마우스 세트 (화이트, 키스킨 포함)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">17,400</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">87</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 ERGO K860 (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">186,750</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">270</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="darkFlash" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">88</td>
+                            <td class="py-3 px-4 font-semibold text-white">darkFlash</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">darkFlash DKM100 키보드 마우스 세트 (흑설탕)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">27,170</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">4</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="지클릭커" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">89</td>
+                            <td class="py-3 px-4 font-semibold text-white">지클릭커</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">지클릭커 OFFICEPRO WK20 인체공학 펜타 무선</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">25,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">90</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 K120 New + M90 (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">18,330</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">109</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">91</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 K400 PLUS (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">50,670</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">16</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="QSENN" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">92</td>
+                            <td class="py-3 px-4 font-semibold text-white">QSENN</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">QSENN MK350 무선 키보드 마우스 세트 (화이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">20,400</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">16</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">93</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 시그니처 슬림 솔라+ K980 무선</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">110,670</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">6</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">94</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MK200 NEW (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">22,530</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">94</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="프리미엄 (≥15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">95</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 MX Master 3S + MX Keys S COMBO (정품)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">269,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">프리미엄 (≥15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">20</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="프리플로우" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">96</td>
+                            <td class="py-3 px-4 font-semibold text-white">프리플로우</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">프리플로우 archon AK47 PRO 유무선 기계식 마시멜로우 (세이야축)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">79,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">세이야축</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="한성컴퓨터" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">97</td>
+                            <td class="py-3 px-4 font-semibold text-white">한성컴퓨터</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">한성컴퓨터 HKM1000K PLUS 키보드 마우스 세트</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">21,900</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">4</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="COX" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">98</td>
+                            <td class="py-3 px-4 font-semibold text-white">COX</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">COX CNK84L 유무선 무접점</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">59,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">3</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="삼성전자" data-tier="보급형 (<5만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">99</td>
+                            <td class="py-3 px-4 font-semibold text-white">삼성전자</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">삼성전자 SKG-3000UB (키스킨 포함)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">21,500</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">보급형 (<5만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">1,343</td>
+                        </tr>
+                        <tr class="hover:bg-slate-800/50 transition duration-150 data-row" data-brand="로지텍" data-tier="중급형 (5~15만원)">
+                            <td class="py-3 px-4 font-mono text-slate-500">100</td>
+                            <td class="py-3 px-4 font-semibold text-white">로지텍</td>
+                            <td class="py-3 px-4 font-medium text-slate-200">로지텍 G515 LIGHTSPEED TKL (정품) (화이트)</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-100">129,000</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">중급형 (5~15만원)</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-300">유선+무선</td>
+                            <td class="py-3 px-4 text-slate-300">일반/미표기</td>
+                            <td class="py-3 px-4 text-right font-mono text-slate-400">43</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 text-right text-xs text-slate-400" id="tableCount">
+                표시 중인 제품: <span class="font-bold text-white" id="visibleCount">100</span> / 100개
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-xs text-slate-500 py-4 border-t border-slate-800">
+            다나와 키보드 시장 분석 보고서 © 2026 The Analyst Sub-Agent. All Rights Reserved.
+        </footer>
+    </div>
+
+    <!-- Chart.js Scripts -->
+    <script>
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#334155';
+        Chart.defaults.font.family = 'Pretendard, sans-serif';
+
+        // 1. Brand Chart
+        new Chart(document.getElementById('brandChart'), {
+            type: 'bar',
+            data: {
+                labels: ["앱코", "로지텍", "AULA", "COX", "커세어", "FL-ESPORTS", "프리플로우", "한성컴퓨터"],
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: '제품 수 (개)',
+                        data: [19, 19, 13, 12, 6, 4, 4, 3],
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 6,
+                        yAxisID: 'y'
+                    },
+                    {
+                        type: 'line',
+                        label: '평균 가격 (만원)',
+                        data: [5.5, 8.9, 7.1, 3.0, 23.0, 9.4, 8.1, 5.5],
+                        borderColor: '#ef4444',
+                        backgroundColor: '#ef4444',
+                        borderWidth: 2.5,
+                        pointRadius: 4,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        type: 'linear',
+                        position: 'left',
+                        title: { display: true, text: '제품 수 (개)' },
+                        grid: { color: '#1e293b' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        position: 'right',
+                        title: { display: true, text: '평균 가격 (만원)' },
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // 2. Tier Donut Chart
+        new Chart(document.getElementById('tierChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ["보급형 (<5만원)", "중급형 (5~15만원)", "프리미엄 (≥15만원)"],
+                datasets: [{
+                    data: [43, 44, 13],
+                    backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                cutout: '65%'
+            }
+        });
+
+        // 3. Connection Chart
+        new Chart(document.getElementById('connChart'), {
+            type: 'bar',
+            data: {
+                labels: ["유선", "유선+무선", "무선", "기타/미표기"],
+                datasets: [
+                    {
+                        label: '평균 가격 (만원)',
+                        data: [7.7, 9.8, 7.2, 0.6],
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 6
+                    }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: '평균 가격 (만원)' },
+                        grid: { color: '#1e293b' }
+                    }
+                }
+            }
+        });
+
+        // 4. Switch Chart
+        new Chart(document.getElementById('switchChart'), {
+            type: 'bar',
+            data: {
+                labels: ["갈축", "레몬축", "저소음 바다축", "저소음 피치축", "저소음 피치축 V2", "적축"],
+                datasets: [{
+                    label: '평균 가격 (만원)',
+                    data: [11.6, 9.8, 7.3, 7.2, 6.7, 3.5],
+                    backgroundColor: '#8b5cf6',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: '평균 가격 (만원)' },
+                        grid: { color: '#1e293b' }
+                    }
+                }
+            }
+        });
+
+        // Table Filter Logic
+        const searchInput = document.getElementById('searchInput');
+        const brandFilter = document.getElementById('brandFilter');
+        const tierFilter = document.getElementById('tierFilter');
+        const rows = document.querySelectorAll('.data-row');
+        const visibleCountSpan = document.getElementById('visibleCount');
+
+        function filterTable() {
+            const searchVal = searchInput.value.toLowerCase();
+            const brandVal = brandFilter.value;
+            const tierVal = tierFilter.value;
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                const brand = row.getAttribute('data-brand');
+                const tier = row.getAttribute('data-tier');
+
+                const matchSearch = text.includes(searchVal);
+                const matchBrand = !brandVal || brand === brandVal;
+                const matchTier = !tierVal || tier === tierVal;
+
+                if (matchSearch && matchBrand && matchTier) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            visibleCountSpan.innerText = visibleCount;
+        }
+
+        searchInput.addEventListener('input', filterTable);
+        brandFilter.addEventListener('change', filterTable);
+        tierFilter.addEventListener('change', filterTable);
+    </script>
+</body>
+</html>

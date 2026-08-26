@@ -14,7 +14,7 @@ class AsyncAgentClient:
     httpx + httpx-sse 기반으로 비동기 SSE 스트리밍을 지원합니다.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 120.0):
+    def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 600.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
@@ -69,6 +69,92 @@ class AsyncAgentClient:
                 return response.status_code == 200
             except httpx.HTTPError:
                 return False
+
+    async def async_invoke(
+        self,
+        agent_name: str,
+        message: str,
+        thread_id: Optional[str] = None,
+    ) -> dict:
+        """
+        POST /agents/{agent_name}/invoke — 단일 에이전트 호출을 비동기로 수행합니다.
+        invoke_sub_agent 도구에서 서버 내부 sub-agent를 호출할 때 사용합니다.
+
+        Args:
+            agent_name: 호출할 에이전트 이름 (e.g. 'scraper', 'analyst')
+            message: 에이전트에게 전달할 메시지
+            thread_id: 세션 연속성을 위한 스레드 ID (None이면 새 세션)
+
+        Returns:
+            {"type": "ai", "content": "..."} 형태의 응답 딕셔너리.
+            오류 발생 시 {"type": "error", "content": str(e)} 반환.
+        """
+        url = f"{self.base_url}/agents/{agent_name}/invoke"
+        payload = {"message": message, "thread_id": thread_id}
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=10.0)) as client:
+            try:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                return {"type": "error", "content": str(e)}
+
+    async def submit_job(
+        self,
+        agent_name: str,
+        message: str,
+        thread_id: Optional[str] = None,
+        callback_agent: Optional[str] = "supervisor",
+        callback_thread_id: Optional[str] = None,
+    ) -> dict:
+        """
+        POST /agents/{agent_name}/jobs — 작업을 백그라운드로 등록하고 job_id를 즉시 수신합니다.
+        """
+        url = f"{self.base_url}/agents/{agent_name}/jobs"
+        payload = {
+            "message": message,
+            "thread_id": thread_id,
+            "callback_agent": callback_agent,
+            "callback_thread_id": callback_thread_id,
+        }
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                return {"status": "error", "message": str(e)}
+
+    async def get_job(self, job_id: str) -> dict:
+        """
+        GET /jobs/{job_id} — 백그라운드 작업의 상태 및 결과를 조회합니다.
+        """
+        url = f"{self.base_url}/jobs/{job_id}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                response = await client.get(url)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                return {"status": "error", "message": str(e)}
+
+    async def get_messages(self, session_id: str) -> list:
+        """
+        GET /sessions/{session_id}/messages — 세션의 대화 이력을 조회합니다.
+        invoke_sub_agent에서 첫 호출 여부를 판단하는 데 사용합니다.
+
+        Returns:
+            메시지 목록 (비어있으면 첫 호출). 오류 시 빈 리스트 반환.
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(f"{self.base_url}/sessions/{session_id}/messages")
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError:
+                return []
 
     async def resume(
         self,

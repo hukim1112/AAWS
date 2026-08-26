@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다나와 키보드 시장 실시간 심층 대시보드</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: #0F172A;
+            color: #F8FAFC;
+        }
+        .card-glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .table-row-hover:hover {
+            background-color: rgba(51, 65, 85, 0.5);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0F172A;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <!-- Header -->
+    <header class="max-w-7xl mx-auto mb-8">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+            <div>
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                    2026 다나와 키보드 카테고리 실시간 빅데이터 분석
+                </div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                    <i class="fa-solid fa-keyboard text-blue-500"></i> 다나와 키보드 시장 분석 인텔리전스
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">인기 상위 100개 상품 대상 가격대·연결방식·스위치·브랜드 다각도 인사이트 대시보드</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-slate-400 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
+                    <i class="fa-regular fa-clock mr-1 text-slate-400"></i> 기준: 2026.08.27
+                </span>
+                <button onclick="window.print()" class="px-3 py-2 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700 flex items-center gap-1.5">
+                    <i class="fa-solid fa-print"></i> 인쇄 / PDF
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto space-y-8">
+        <!-- KPI Cards Grid -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Card 1 -->
+            <div class="card-glass rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-medium text-slate-400">수집 상품 수</span>
+                    <span class="p-2 rounded-xl bg-blue-500/10 text-blue-400"><i class="fa-solid fa-boxes-stacked"></i></span>
+                </div>
+                <div class="text-3xl font-extrabold text-white">100<span class="text-lg font-medium text-slate-400 ml-1">개</span></div>
+                <p class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+                    <i class="fa-solid fa-circle-check"></i> 다나와 카테고리 100% 정상 수집
+                </p>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="card-glass rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-medium text-slate-400">평균 / 중앙값 가격</span>
+                    <span class="p-2 rounded-xl bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-won-sign"></i></span>
+                </div>
+                <div class="text-2xl font-extrabold text-white">₩84,152</div>
+                <div class="text-xs text-slate-400 mt-2 flex justify-between">
+                    <span>중앙값: <strong class="text-indigo-300">₩66,495</strong></span>
+                    <span>최고가: ₩446,390</span>
+                </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="card-glass rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-medium text-slate-400">무선 지원 비율</span>
+                    <span class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-wifi"></i></span>
+                </div>
+                <div class="text-3xl font-extrabold text-emerald-400">55.0<span class="text-lg font-medium text-slate-400 ml-1">%</span></div>
+                <p class="text-xs text-slate-400 mt-2">유무선 겸용 32% + 순수 무선 23%</p>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="card-glass rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-purple-500/10 rounded-full blur-xl"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-medium text-slate-400">인기 기계식 스위치</span>
+                    <span class="p-2 rounded-xl bg-purple-500/10 text-purple-400"><i class="fa-solid fa-sliders"></i></span>
+                </div>
+                <div class="text-2xl font-extrabold text-purple-400">저소음 바다축 / 적축</div>
+                <p class="text-xs text-slate-400 mt-2">저소음·커스텀 독자축 선호 뚜렷</p>
+            </div>
+        </section>
+
+        <!-- Charts Grid (2x2) -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Chart 1: Price Tier -->
+            <div class="card-glass rounded-2xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-blue-400"></i> 가격대 구간별 상품 분포
+                    </h3>
+                    <span class="text-xs text-slate-400">단위: 개수 (%)</span>
+                </div>
+                <div class="h-64 relative">
+                    <canvas id="priceTierChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Connection Type -->
+            <div class="card-glass rounded-2xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-satellite-dish text-emerald-400"></i> 연결 방식별 시장 점유율
+                    </h3>
+                    <span class="text-xs text-slate-400">단위: %</span>
+                </div>
+                <div class="h-64 relative">
+                    <canvas id="connChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 3: Top Brands Average Price & Count -->
+            <div class="card-glass rounded-2xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-tags text-indigo-400"></i> 주요 브랜드별 평균 가격 비교 (Top 8)
+                    </h3>
+                    <span class="text-xs text-slate-400">단위: 원</span>
+                </div>
+                <div class="h-64 relative">
+                    <canvas id="brandChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 4: Switch Types -->
+            <div class="card-glass rounded-2xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-microchip text-purple-400"></i> 인기 기계식 스위치(축) 순위
+                    </h3>
+                    <span class="text-xs text-slate-400">단위: 상품 수</span>
+                </div>
+                <div class="h-64 relative">
+                    <canvas id="switchChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Market Insight Section -->
+        <section class="card-glass rounded-2xl p-6 shadow-xl border-l-4 border-l-blue-500">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-lightbulb text-amber-400"></i> 키보드 시장 핵심 인텔리전스 인사이트
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50">
+                    <div class="font-bold text-blue-400 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-fire"></i> 1. '독거미(AULA)' 가성비 충격
+                    </div>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        AULA 브랜드가 14% 점유율로 3위에 오르며 4~8만원대 가스켓 마운트와 저소음 축을 탑재한 완성형 유무선 키보드로 시장 생태계를 재편하고 있습니다.
+                    </p>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50">
+                    <div class="font-bold text-emerald-400 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-tower-broadcast"></i> 2. 무선화 대세 (55% 점유)
+                    </div>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        블루투스 + 2.4Ghz + C타입 유선을 모두 지원하는 '유선+무선' 복합형(32%)과 순수 무선(23%)이 과반을 넘어 데스크테리어 및 멀티디바이스 수요가 주류입니다.
+                    </p>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50">
+                    <div class="font-bold text-purple-400 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-volume-xmark"></i> 3. '저소음 특화축' 선호 폭발
+                    </div>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        과거 청축 중심에서 벗어나 사무실과 가정에서 조용하고 도각거리는 키감을 제공하는 '저소음 바다축', '피치축 V2', '스톰축' 등 저소음 리니어축이 1위를 석권했습니다.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Product Table & Search/Filter Section -->
+        <section class="card-glass rounded-2xl p-6 shadow-xl">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-table-list text-blue-400"></i> 상품별 세부 데이터 검색 및 분석
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-1">실시간 필터링, 정렬 및 다각도 조건 검색</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="searchInput" placeholder="상품명 또는 브랜드 검색..." class="bg-slate-800 text-slate-200 pl-9 pr-4 py-2 rounded-xl text-xs border border-slate-700 focus:outline-none focus:border-blue-500 w-56">
+                    </div>
+                    <select id="connFilter" class="bg-slate-800 text-slate-200 px-3 py-2 rounded-xl text-xs border border-slate-700 focus:outline-none focus:border-blue-500">
+                        <option value="">모든 연결방식</option>
+                        <option value="유선">유선</option>
+                        <option value="유선+무선">유선+무선</option>
+                        <option value="무선">무선</option>
+                    </select>
+                    <select id="brandFilter" class="bg-slate-800 text-slate-200 px-3 py-2 rounded-xl text-xs border border-slate-700 focus:outline-none focus:border-blue-500">
+                        <option value="">모든 브랜드</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto rounded-xl border border-slate-800 max-h-[500px]">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-800/90 sticky top-0 text-slate-300 uppercase font-semibold border-b border-slate-700">
+                        <tr>
+                            <th class="py-3 px-4 w-12 text-center">#</th>
+                            <th class="py-3 px-4 w-28">브랜드</th>
+                            <th class="py-3 px-4">상품명</th>
+                            <th class="py-3 px-4 w-28 text-right cursor-pointer hover:text-blue-400" onclick="sortTable('price')">
+                                가격 <i class="fa-solid fa-sort text-slate-500 ml-1"></i>
+                            </th>
+                            <th class="py-3 px-4 w-32">스위치 종류</th>
+                            <th class="py-3 px-4 w-24 text-center">연결 방식</th>
+                            <th class="py-3 px-4 w-24 text-right cursor-pointer hover:text-blue-400" onclick="sortTable('review_count')">
+                                리뷰 수 <i class="fa-solid fa-sort text-slate-500 ml-1"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-800/60">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex items-center justify-between mt-4 text-xs text-slate-400">
+                <span id="filteredCount">총 100개 상품 중 100개 표시</span>
+                <span class="text-slate-500">데이터 소스: 다나와 크롤링 결과</span>
+            </div>
+        </section>
+    </main>
+
+    <footer class="max-w-7xl mx-auto mt-12 pt-6 border-t border-slate-800 text-center text-xs text-slate-500">
+        <p>Copyright © 2026 The Analyst AI. Danawa Keyboard Market Intelligence Dashboard.</p>
+    </footer>
+
+    <!-- Script Section -->
+    <script>
+        const rawData = {"total_count": 100, "avg_price": 84152, "median_price": 66495, "max_price": 446390, "min_price": 3990, "total_reviews": 4162, "wireless_ratio": 55.0, "mech_ratio": 42.0, "tier_dist": {"7~15만원 (고급형/커스텀/무선)": 33, "3만원 미만 (초가성비/보급형)": 29, "3~7만원 (가성비 기계식/메인스트림)": 25, "15만원 이상 (하이엔드/플래그십)": 13}, "conn_dist": {"유선": 43, "유선+무선": 32, "무선": 23, "미표기": 2}, "brand_stats": [{"brand": "로지텍 (Logitech)", "count": 19, "avg_price": 87208.94736842105, "median_price": 79900.0}, {"brand": "앱코 (ABKO)", "count": 17, "avg_price": 55245.882352941175, "median_price": 58000.0}, {"brand": "AULA (독거미)", "count": 14, "avg_price": 70971.42857142857, "median_price": 77500.0}, {"brand": "COX", "count": 12, "avg_price": 27873.333333333332, "median_price": 28950.0}, {"brand": "커세어 (CORSAIR)", "count": 8, "avg_price": 237723.75, "median_price": 210970.0}, {"brand": "FL-ESPORTS", "count": 4, "avg_price": 94000.0, "median_price": 98000.0}, {"brand": "프리플로우", "count": 4, "avg_price": 81225.0, "median_price": 84450.0}, {"brand": "체리 (CHERRY)", "count": 3, "avg_price": 121400.0, "median_price": 99000.0}, {"brand": "darkFlash", "count": 3, "avg_price": 35556.666666666664, "median_price": 34490.0}, {"brand": "한성컴퓨터", "count": 2, "avg_price": 71940.0, "median_price": 71940.0}], "switch_dist": {"저소음 바다축": 10, "적축": 10, "갈축": 4, "저소음 피치축 V2": 2, "레몬축": 2, "광축": 2, "SNOW축": 1, "저소음 솜사탕축": 1}, "products": [{"brand": "AULA (독거미)", "product_name": "AULA F108 PRO 유무선 기계식 치즈 화이트 한글 (저소음 바다축)", "price": 89000, "switch_type_display": "저소음 바다축", "connection_type": "유선+무선", "review_count": 50, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "AULA (독거미)", "product_name": "AULA F87 Pro 유무선 기계식 인디고 블랙 한글 (저소음 피치축 V2)", "price": 67000, "switch_type_display": "저소음 피치축 V2", "connection_type": "유선+무선", "review_count": 34, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "FL-ESPORTS", "product_name": "FL-ESPORTS NX87HE 민트 블랙 (저소음 스톰축)", "price": 98000, "switch_type_display": "저소음 스톰축", "connection_type": "유선", "review_count": 1, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "AULA (독거미)", "product_name": "AULA F87 Pro 기계식 다크 올리비아 한글 (저소음 바다축)", "price": 48000, "switch_type_display": "저소음 바다축", "connection_type": "유선", "review_count": 13, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 K560 축교환 레인보우 무빙 LED 기계식 블랙 (적축)", "price": 28510, "switch_type_display": "적축", "connection_type": "유선", "review_count": 126, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 KEYS-TO-GO 2 (정품) (그라파이트)", "price": 84900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 91, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR 뱅가드 AIR 99 무선 (화이트)", "price": 359440, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 1, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MK295 SILENT (정품) (블랙)", "price": 37900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 327, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR 뱅가드 PRO 96 게이밍", "price": 208990, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 7, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "레이저 (Razer)", "product_name": "Razer Huntsman V3 HE Magnetic TKL", "price": 239000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "AULA (독거미)", "product_name": "AULA F108 기계식 라이트 그레이 (저소음 바다축)", "price": 65000, "switch_type_display": "저소음 바다축", "connection_type": "유선", "review_count": 13, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "AULA (독거미)", "product_name": "AULA F108 유무선 기계식 스카이 블랙 한글 (저소음 바다축)", "price": 82000, "switch_type_display": "저소음 바다축", "connection_type": "유선+무선", "review_count": 129, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "AULA (독거미)", "product_name": "AULA F87 Pro V2 유무선 기계식 모던 블랙 (저소음 바다축)", "price": 85000, "switch_type_display": "저소음 바다축", "connection_type": "유선+무선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "COX", "product_name": "COX CKM40W 저소음 무선 키보드 마우스 세트 (블랙)", "price": 17590, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 25, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MK250 무선 키보드 마우스 세트", "price": 25900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 32, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 ACH105 오피스워커 유무선 기계식 블랙 (저소음 바다소금축)", "price": 79000, "switch_type_display": "저소음 바다소금축", "connection_type": "유선+무선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "AULA (독거미)", "product_name": "AULA S102Pro 유무선 (그레이)", "price": 29800, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 10, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 시그니처 MK650 (정품) (그라파이트)", "price": 79900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 60, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "ASUS", "product_name": "ASUS ROG AZOTH X 유무선 기계식 (SNOW축)", "price": 299000, "switch_type_display": "SNOW축", "connection_type": "유선+무선", "review_count": 2, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MK235 (정품) (키스킨 미포함)", "price": 25550, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 650, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 시그니처 슬림 MK950 키보드 마우스 세트 (정품) (그래파이트)", "price": 118990, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 61, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 K380S (정품) (스모키블랙)", "price": 30490, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 167, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MX Keys S (정품) (그라파이트)", "price": 139000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 81, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 K120 New (정품)", "price": 11990, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 K561 교체축 유무선 블루투스 기계식 블랙 (적축)", "price": 29900, "switch_type_display": "적축", "connection_type": "유선+무선", "review_count": 19, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "Nillkin", "product_name": "Nillkin Cube Pocket (그레이)", "price": 67280, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 0, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "한성컴퓨터", "product_name": "한성컴퓨터 GK698 OfficeMaster 유무선 (RETRO POINT)", "price": 39880, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 59, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 Wave Keys + LIFT VERTICAL Combo 무선 키보드 마우스 세트 (그래파이트)", "price": 134100, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 25, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR 클리퍼 PRO 미니 60 (화이트)", "price": 169000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "프리플로우", "product_name": "프리플로우 archon M1 PRO 2 MAX (메카닉)", "price": 99000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 1, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "프리플로우", "product_name": "프리플로우 archon M1 PRO 2 TKL (메카닉)", "price": 89000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 1, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MX Mechanical (정품) (갈축)", "price": 178980, "switch_type_display": "갈축", "connection_type": "무선", "review_count": 48, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "AULA (독거미)", "product_name": "AULA F108 PRO 유무선 기계식 오로라 블랙 한글 (저소음 솜사탕축)", "price": 89000, "switch_type_display": "저소음 솜사탕축", "connection_type": "유선+무선", "review_count": 43, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 K562 교체축 3모드 계산기 유무선 기계식", "price": 23900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 2, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "주연테크", "product_name": "주연테크 긱스타 GK108FE (봄 꽃비)", "price": 18800, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "한성컴퓨터", "product_name": "한성컴퓨터 TFG Magnetox 2XF 저소음 (쿠키앤크림)", "price": 104000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 1, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "SPM", "product_name": "SPM PL87W 몽돌 유무선 기계식 (블랙)", "price": 56900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 110, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "레이저 (Razer)", "product_name": "Razer Huntsman V3 Pro TKL 8K KR (정품)", "price": 329000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 5, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "AULA (독거미)", "product_name": "AULA F108 유무선 기계식 블러쉬 핑크 한글 (저소음 바다축)", "price": 89000, "switch_type_display": "저소음 바다축", "connection_type": "유선+무선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "COX", "product_name": "COX COS10 유선 키보드 마우스 세트", "price": 8900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 4, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR K70 MAX RGB MGX 게이밍 기계식 (마그네틱축)", "price": 287030, "switch_type_display": "마그네틱축", "connection_type": "유선", "review_count": 72, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "AULA (독거미)", "product_name": "AULA F87 Pro 유무선 기계식 올리비아 화이트 한글 (저소음 피치축 V2)", "price": 67000, "switch_type_display": "저소음 피치축 V2", "connection_type": "유선+무선", "review_count": 35, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "AULA (독거미)", "product_name": "AULA F87 Pro V2 유무선 기계식 샌드 베이지 (저소음 바다축)", "price": 85000, "switch_type_display": "저소음 바다축", "connection_type": "유선+무선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "체리 (CHERRY)", "product_name": "CHERRY XTRFY K37 유무선 (화이트)", "price": 58000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 0, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 AK998 8K OTEMU 특주축 기계식 스카이 블루 (멜론축)", "price": 58000, "switch_type_display": "멜론축", "connection_type": "유선", "review_count": 3, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 AK94BT 유무선 기계식 스카이블루 (저소음 피치축)", "price": 79380, "switch_type_display": "저소음 피치축", "connection_type": "유선+무선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 AK87 슬림 프로 3모드 로우 프로파일 유무선 기계식 (햇살축)", "price": 75000, "switch_type_display": "햇살축", "connection_type": "유선+무선", "review_count": 1, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 mx keys mini (정품) (그라파이트)", "price": 99000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 259, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "AULA (독거미)", "product_name": "AULA F108 유무선 기계식 올리비아 화이트 한글 (저소음 바다축)", "price": 82000, "switch_type_display": "저소음 바다축", "connection_type": "유선+무선", "review_count": 53, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MK200 NEW (정품)", "price": 22530, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 94, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "체리 (CHERRY)", "product_name": "CHERRY XTRFY MX 8.2 PRO TMR 8K 유무선", "price": 207200, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 1, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "AULA (독거미)", "product_name": "AULA F87 Pro 기계식 라이트 올리비아 한글 (저소음 바다축)", "price": 42800, "switch_type_display": "저소음 바다축", "connection_type": "유선", "review_count": 11, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "지클릭커", "product_name": "지클릭커 오피스프로 WK35 (그린)", "price": 29800, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 0, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "COX", "product_name": "COX CKM510 게이밍 키보드 마우스 세트", "price": 18900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 2, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR K70 RGB PRO (갈축)", "price": 212950, "switch_type_display": "갈축", "connection_type": "유선", "review_count": 120, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "마이크로닉스", "product_name": "마이크로닉스 MANIC PAMPAM 팜레스트 키보드 손목받침대", "price": 8630, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "미표기", "review_count": 59, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "COX", "product_name": "COX CK420 교체축 레인보우 LED 게이밍 기계식 화이트 (갈축)", "price": 29900, "switch_type_display": "갈축", "connection_type": "유선", "review_count": 16, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "COX", "product_name": "COX CK01 TKL (적축)", "price": 31900, "switch_type_display": "적축", "connection_type": "유선", "review_count": 12, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "COX", "product_name": "COX CK01 PBT 이색사출 사이드 RGB 기계식 키보드 (적축)", "price": 31500, "switch_type_display": "적축", "connection_type": "유선", "review_count": 7, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "COX", "product_name": "COX CY104K V2 카일 광축 V2 게이밍 블랙 (적축)", "price": 65000, "switch_type_display": "적축", "connection_type": "유선", "review_count": 1, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "글로리어스", "product_name": "글로리어스 GMBK 75%", "price": 59000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "COX", "product_name": "COX CK87 크림블루 게이트론 LED 게이밍 기계식 (갈축)", "price": 42000, "switch_type_display": "갈축", "connection_type": "유선", "review_count": 16, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 K561 교체축 유무선 블루투스 기계식 화이트 (적축)", "price": 29900, "switch_type_display": "적축", "connection_type": "유선+무선", "review_count": 10, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR K70 RGB CORE 게이밍 기계식 (블랙)", "price": 138990, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 23, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 KN30BT 블루투스 유무선 무접점", "price": 109000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 20, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "COX", "product_name": "COX COS600 무선", "price": 26900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 1, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 MK87 저소음 텐키리스 멤브레인 (오트밀)", "price": 17900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 13, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "FL-ESPORTS", "product_name": "FL-ESPORTS NX108 유무선 기계식 크림 핑크 (저소음 파도축)", "price": 82000, "switch_type_display": "저소음 파도축", "connection_type": "유선+무선", "review_count": 7, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "마이크로닉스", "product_name": "마이크로닉스 MANIC X240 LED 게이밍 기계식 키보드 (청축)", "price": 27900, "switch_type_display": "청축", "connection_type": "유선", "review_count": 18, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 KN35BT DRT 8K 염료승화 블루투스 유무선 무접점 (베른)", "price": 109000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 7, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 K560 축교환 레인보우 무빙 LED 기계식 화이트 (적축)", "price": 30900, "switch_type_display": "적축", "connection_type": "유선", "review_count": 34, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "COX", "product_name": "COX CK01 TKL PBT 기계식 키보드 (적축)", "price": 29900, "switch_type_display": "적축", "connection_type": "유선", "review_count": 3, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "FL-ESPORTS", "product_name": "FL-ESPORTS NX108HE 민트 블랙 (레몬축)", "price": 98000, "switch_type_display": "레몬축", "connection_type": "유선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 HACKER K660 축교환 완전방수 게이밍 카일 광축 옐로우 (클릭)", "price": 65990, "switch_type_display": "광축", "connection_type": "유선", "review_count": 49, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "FL-ESPORTS", "product_name": "FL-ESPORTS NX108HE 네온 그레이 (레몬축)", "price": 98000, "switch_type_display": "레몬축", "connection_type": "유선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "COX", "product_name": "COX 카일 정품 광축 스위치 (5+5개, 클릭/리니어)", "price": 3990, "switch_type_display": "광축", "connection_type": "미표기", "review_count": 20, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "프리플로우", "product_name": "프리플로우 archon AK47 유무선 기계식 (마에스트로)", "price": 57000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 74, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "darkFlash", "product_name": "darkFlash DKM100 키보드 마우스 세트 (흑설탕)", "price": 27170, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 4, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MK275 (정품)", "price": 34780, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 291, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 G515 LIGHTSPEED TKL (정품) (화이트)", "price": 129000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 43, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "darkFlash", "product_name": "darkFlash CK104 무선 기계식 키보드 마우스 세트 블랙 (적축)", "price": 34490, "switch_type_display": "적축", "connection_type": "무선", "review_count": 4, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 ERGO K860 (정품)", "price": 159000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 270, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "COX", "product_name": "COX COS500 무선", "price": 28000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 4, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 K400 PLUS (정품)", "price": 51570, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 16, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 AF108PRO ABKO x SOAI 콜라보 3모드 기계식 코랄블루 (소복눈축)", "price": 79000, "switch_type_display": "소복눈축", "connection_type": "유선+무선", "review_count": 21, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "프리플로우", "product_name": "프리플로우 archon AK47 PRO 유무선 기계식 마시멜로우 (세이야축)", "price": 79900, "switch_type_display": "세이야축", "connection_type": "유선+무선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MX Master 3S + MX Keys S COMBO (정품)", "price": 269000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 20, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 KM580 저소음 기계식 키보드 마우스 세트 (블랙)", "price": 77000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "삼성전자", "product_name": "삼성전자 SKG-3000UB (키스킨 포함)", "price": 21500, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "SPM", "product_name": "SPM 세모키 PL87W ARA 유무선 기계식", "price": 69000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 31, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 MK108 저소음 멤브레인 (블랙)", "price": 18900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 77, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "MSI", "product_name": "MSI FORGE K200 WIRELESS", "price": 20900, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 0, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "앱코 (ABKO)", "product_name": "앱코 K517 레트로 기계식 (적축)", "price": 27900, "switch_type_display": "적축", "connection_type": "유선", "review_count": 54, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "로지텍 (Logitech)", "product_name": "로지텍 MK235 (병행수입)", "price": 24390, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "무선", "review_count": 70, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "darkFlash", "product_name": "darkFlash GD68 유무선 기계식 (별빛 파랑)", "price": 45010, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선+무선", "review_count": 1, "price_tier": "3~7만원 (가성비 기계식/메인스트림)"}, {"brand": "AULA (독거미)", "product_name": "AULA F87 Pro 유무선 기계식 블러쉬 핑크 한글 (저소음 바다축)", "price": 73000, "switch_type_display": "저소음 바다축", "connection_type": "유선+무선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR 스키프 100 PLUS", "price": 79000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}, {"brand": "커세어 (CORSAIR)", "product_name": "CORSAIR 갤리온 100 SD 스트림덱 LCD 기계식", "price": 446390, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "15만원 이상 (하이엔드/플래그십)"}, {"brand": "큐센 (QSENN)", "product_name": "QSENN GP-K7000 (블랙)", "price": 26840, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 17, "price_tier": "3만원 미만 (초가성비/보급형)"}, {"brand": "체리 (CHERRY)", "product_name": "CHERRY XTRFY K5 PRO TMR (블랙)", "price": 99000, "switch_type_display": "미표기/멤브레인/기타", "connection_type": "유선", "review_count": 0, "price_tier": "7~15만원 (고급형/커스텀/무선)"}]};
+        let currentData = [...rawData.products];
+        let sortAsc = { price: false, review_count: false };
+
+        // Populate Brand Filter
+        const brandSet = [...new Set(rawData.products.map(p => p.brand))].sort();
+        const brandFilter = document.getElementById('brandFilter');
+        brandSet.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b;
+            brandFilter.appendChild(opt);
+        });
+
+        // Render Table
+        function renderTable(items) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            items.forEach((item, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = 'table-row-hover transition-colors';
+                
+                let connBadge = '';
+                if(item.connection_type.includes('유선+무선')) {
+                    connBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">유선+무선</span>';
+                } else if(item.connection_type.includes('무선')) {
+                    connBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">무선</span>';
+                } else if(item.connection_type.includes('유선')) {
+                    connBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">유선</span>';
+                } else {
+                    connBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-700 text-slate-400">미표기</span>';
+                }
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center text-slate-500 font-mono">${idx + 1}</td>
+                    <td class="py-3 px-4 font-semibold text-slate-200">${item.brand}</td>
+                    <td class="py-3 px-4 text-white font-medium hover:text-blue-400 transition cursor-default">${item.product_name}</td>
+                    <td class="py-3 px-4 text-right font-bold text-blue-400 font-mono">₩${item.price.toLocaleString()}</td>
+                    <td class="py-3 px-4 text-slate-300">${item.switch_type_display !== '미표기/멤브레인/기타' ? '<span class="text-amber-300 font-medium">'+item.switch_type_display+'</span>' : '<span class="text-slate-500">-</span>'}</td>
+                    <td class="py-3 px-4 text-center">${connBadge}</td>
+                    <td class="py-3 px-4 text-right font-mono text-slate-400">${item.review_count.toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('filteredCount').textContent = `총 ${rawData.products.length}개 상품 중 ${items.length}개 표시`;
+        }
+
+        // Filter Logic
+        function filterData() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const conn = document.getElementById('connFilter').value;
+            const brand = document.getElementById('brandFilter').value;
+
+            currentData = rawData.products.filter(p => {
+                const matchSearch = p.product_name.toLowerCase().includes(search) || p.brand.toLowerCase().includes(search);
+                const matchConn = !conn || p.connection_type === conn;
+                const matchBrand = !brand || p.brand === brand;
+                return matchSearch && matchConn && matchBrand;
+            });
+
+            renderTable(currentData);
+        }
+
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        document.getElementById('connFilter').addEventListener('change', filterData);
+        document.getElementById('brandFilter').addEventListener('change', filterData);
+
+        function sortTable(key) {
+            sortAsc[key] = !sortAsc[key];
+            currentData.sort((a, b) => {
+                return sortAsc[key] ? a[key] - b[key] : b[key] - a[key];
+            });
+            renderTable(currentData);
+        }
+
+        renderTable(currentData);
+
+        // Chart 1: Price Tier Doughnut
+        new Chart(document.getElementById('priceTierChart'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(rawData.tier_dist),
+                datasets: [{
+                    data: Object.values(rawData.tier_dist),
+                    backgroundColor: ['#0EA5E9', '#6366F1', '#EC4899', '#F59E0B'],
+                    borderWidth: 2,
+                    borderColor: '#1E293B'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 11 } } }
+                }
+            }
+        });
+
+        // Chart 2: Connection Type Pie
+        new Chart(document.getElementById('connChart'), {
+            type: 'pie',
+            data: {
+                labels: Object.keys(rawData.conn_dist),
+                datasets: [{
+                    data: Object.values(rawData.conn_dist),
+                    backgroundColor: ['#3B82F6', '#10B981', '#8B5CF6', '#64748B'],
+                    borderWidth: 2,
+                    borderColor: '#1E293B'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 11 } } }
+                }
+            }
+        });
+
+        // Chart 3: Top Brands Bar
+        const topBrands = rawData.brand_stats.slice(0, 8);
+        new Chart(document.getElementById('brandChart'), {
+            type: 'bar',
+            data: {
+                labels: topBrands.map(b => b.brand),
+                datasets: [{
+                    label: '평균 가격 (원)',
+                    data: topBrands.map(b => Math.round(b.avg_price)),
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94A3B8', callback: v => '₩' + (v/10000) + '만' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94A3B8', font: { size: 10 } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // Chart 4: Switch Types Horizontal Bar
+        new Chart(document.getElementById('switchChart'), {
+            type: 'bar',
+            data: {
+                labels: Object.keys(rawData.switch_dist),
+                datasets: [{
+                    label: '상품 수 (개)',
+                    data: Object.values(rawData.switch_dist),
+                    backgroundColor: '#A855F7',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94A3B8', stepSize: 2 }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#94A3B8', font: { size: 11 } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

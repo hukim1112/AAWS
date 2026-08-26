@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>키보드 시장 분석 보고서</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Noto Sans KR',sans-serif; background:#F8F9FA; color:#2C3E50; line-height:1.6; }
+.dashboard { max-width:1200px; margin:0 auto; padding:24px; }
+.header { background:linear-gradient(135deg,#4A90E2,#7B68EE); color:white; padding:32px; border-radius:12px; margin-bottom:24px; }
+.header h1 { font-size:28px; font-weight:700; }
+.header p { opacity:0.9; margin-top:8px; }
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:24px; }
+.stat-card { background:white; border-radius:8px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border-left:4px solid #4A90E2; }
+.stat-card .label { font-size:13px; color:#6C757D; }
+.stat-card .value { font-size:28px; font-weight:700; margin-top:4px; }
+.card { background:white; border-radius:8px; padding:24px; margin-bottom:24px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.card h2 { font-size:18px; font-weight:600; margin-bottom:16px; padding-bottom:8px; border-bottom:2px solid #4A90E2; }
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+.chart-container { position:relative; height:300px; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th { background:#4A90E2; color:white; padding:12px 16px; text-align:left; font-weight:500; }
+td { padding:10px 16px; border-bottom:1px solid #DEE2E6; }
+tr:hover { background:#F1F5F9; }
+tr:nth-child(even) { background:#FAFBFC; }
+@media(max-width:768px) { .grid-2 { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <div class="header">
+    <h1>⌨️ 키보드 시장 분석 보고서</h1>
+    <p>다나와 키보드 카테고리 Top 100개 제품 분석 | Analyst Agent 생성</p>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">총 제품 수</div><div class="value">100개</div></div>
+    <div class="stat-card"><div class="label">평균 가격</div><div class="value">84,152원</div></div>
+    <div class="stat-card"><div class="label">최고가</div><div class="value">446,390원</div></div>
+    <div class="stat-card"><div class="label">총 리뷰</div><div class="value">4,162건</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h2>📊 연결 방식별 분포</h2>
+      <div class="chart-container"><canvas id="connChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>💰 가격대별 분포</h2>
+      <div class="chart-container"><canvas id="priceChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🏆 리뷰 수 Top 10</h2>
+    <table>
+      <tr><th>제품명</th><th>가격</th><th>연결</th><th>리뷰</th></tr>
+      <tr><td>로지텍 MK235 (정품) (키스킨 미포함)</td><td>25,550원</td><td>무선</td><td>650</td></tr><tr><td>로지텍 MK295 SILENT (정품) (블랙)</td><td>37,900원</td><td>무선</td><td>327</td></tr><tr><td>로지텍 MK275 (정품)</td><td>34,780원</td><td>무선</td><td>291</td></tr><tr><td>로지텍 ERGO K860 (정품)</td><td>159,000원</td><td>무선</td><td>270</td></tr><tr><td>로지텍 mx keys mini (정품) (그라파이트)</td><td>99,000원</td><td>무선</td><td>259</td></tr><tr><td>로지텍 K380S (정품) (스모키블랙)</td><td>30,490원</td><td>무선</td><td>167</td></tr><tr><td>AULA F108 유무선 기계식 스카이 블랙 한글 (저소음 바다</td><td>82,000원</td><td>유선+무선</td><td>129</td></tr><tr><td>앱코 K560 축교환 레인보우 무빙 LED 기계식 블랙 (적축)</td><td>28,510원</td><td>유선</td><td>126</td></tr><tr><td>CORSAIR K70 RGB PRO (갈축)</td><td>212,950원</td><td>유선</td><td>120</td></tr><tr><td>SPM PL87W 몽돌 유무선 기계식 (블랙)</td><td>56,900원</td><td>유선+무선</td><td>110</td></tr>
+    </table>
+  </div>
+</div>
+<script>
+new Chart(document.getElementById('connChart'), {
+  type:'doughnut',
+  data:{ labels:["유선", "유선+무선", "무선"], datasets:[{ data:[43, 32, 23], backgroundColor:['#4A90E2','#E74C3C','#27AE60','#F39C12'] }] },
+  options:{ responsive:true, maintainAspectRatio:false, cutout:'60%', plugins:{ legend:{ position:'bottom' } } }
+});
+new Chart(document.getElementById('priceChart'), {
+  type:'bar',
+  data:{ labels:["5만원 미만", "5~10만원", "10~20만원", "20만원 이상"], datasets:[{ label:'제품 수', data:[41, 38, 11, 10], backgroundColor:['#27AE60','#4A90E2','#F39C12','#E74C3C'] }] },
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } }
+});
+</script>
+</body></html>
