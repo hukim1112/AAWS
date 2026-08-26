@@ -25,7 +25,7 @@
 
 ## 🔍 프로젝트 소개
 
-**AAWS (AI Agent Web Scraper)** 는 LLM 기반 에이전트가 웹 탐색·분석·데이터 수집 및 시각화 리포트 작성을 자율적으로 수행하는 시스템을 설계하고 구현하는 핸즈온 프로젝트입니다.
+**AAWS (AI Agent Web Scraper)** 는 LLM 기반 에이전트가 웹 탐색·분석·데이터 수집을 자율적으로 수행하는 시스템을 설계하고 구현하는 핸즈온 프로젝트입니다.
 
 전통적인 크롤링은 개발자가 직접 HTML 구조를 분석하고, 셀렉터를 찾고, 코드를 작성해야 합니다. 사이트 구조가 바뀌면 모든 코드를 처음부터 다시 고쳐야 하죠. AAWS는 이 과정을 지능형 AI 에이전트들에게 전적으로 위임합니다.
 
@@ -120,7 +120,7 @@ missions/
 
 ## 📂 프로젝트 구조
 
-학습 코드(Jupyter Notebook), 프로덕션 에이전트 서빙 코드(FastAPI + Chainlit), 자동 평가 프레임워크(evaluate), 그리고 실전 설계 레슨 문서(`lessons_sumary/`)가 통합된 **모노레포 아키텍처**입니다.
+학습 코드(Jupyter Notebook), 프로덕션 에이전트 서빙 코드(FastAPI + Chainlit), 자동 평가 프레임워크(evaluate)가 단일 저장소로 통합된 **모노레포 아키텍처**입니다.
 
 ```
 AAWS/
@@ -175,8 +175,7 @@ AAWS/
 python app/server.py --port 8000
 ```
 * 에이전트 API 백엔드가 `:8000`에서 서빙됩니다.
-* `POST /agents/{name}/invoke` (동기 스트리밍) 및 `POST /agents/{name}/jobs` (비동기 롱러닝) 지원
-* `http://localhost:8000/docs`에서 Swagger API 문서를 확인할 수 있습니다.
+* `http://localhost:8000/docs`에서 API 상태를 확인할 수 있습니다.
 
 ### 2. Chainlit 채팅 UI 가동 — 터미널 ②
 ```bash
@@ -184,7 +183,6 @@ chainlit run app/chainlit_ui.py --port 8080
 ```
 * 웹 브라우저에서 `http://localhost:8080`에 접속하여 에이전트를 선택하고 대화합니다.
 * 로그인: `user` / `1234`
-* Supervisor가 백그라운드 분석 완료 시 `<Render_HTML>` 태그를 감지하여 **인터랙티브 대시보드를 우측 사이드 패널에 자동 팝업**합니다.
 * Chainlit UI는 내부적으로 `:8000`의 FastAPI 서버에 API 요청을 보내므로, **반드시 서버를 먼저 실행**해야 합니다.
 
 ### 3. 터미널 테스트 CLI (선택)
