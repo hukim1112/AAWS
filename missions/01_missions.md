@@ -120,15 +120,15 @@ python app/server.py --port 8000
 
 #### 🌐 터미널 2 (Chainlit 웹 채팅 UI 가동):
 ```bash
-chainlit run app/chainlit_ui.py -w
+chainlit run app/chainlit_ui.py -w --port 8080
 ```
-*(성공 메시지: `Your app is available at http://localhost:8000` 또는 `8001`)*
+*(성공 메시지: `Your app is available at http://localhost:8080`)*
 
 ---
 
 ### 4단계: 브라우저 접속 및 양방향 기억 테스트 시나리오
 
-1. 웹 브라우저에서 `http://localhost:8000`에 접속합니다.
+1. 웹 브라우저에서 `http://localhost:8080`에 접속합니다.
 2. 로그인 창에서 아이디: `user`, 비밀번호: `1234`로 로그인합니다.
 3. 좌측 상단 프로필에서 **`chatbot`** 에이전트를 선택합니다.
 

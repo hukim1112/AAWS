@@ -205,14 +205,14 @@ python app/server.py --port 8000
 
 #### 🌐 터미널 2 (Chainlit UI 가동):
 ```bash
-chainlit run app/chainlit_ui.py -w
+chainlit run app/chainlit_ui.py -w --port 8080
 ```
 
 ---
 
 ### 4단계: Chat UI에서 멀티에이전트 수집 지시 및 성공 검증
 
-1. 웹 브라우저에서 `http://localhost:8000` (또는 `8001`) 접속 후 로그인(`user` / `1234`).
+1. 웹 브라우저에서 `http://localhost:8080` 접속 후 로그인(`user` / `1234`).
 2. 좌측 상단 프로필 선택창에서 **`supervisor`** 에이전트를 선택합니다.
 3. 채팅 입력창에 다음 메시지를 전송합니다:
 

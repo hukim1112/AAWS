@@ -144,14 +144,14 @@ Instruction: {task_instruction}
 python app/server.py --port 8000
 
 # 터미널 2 (Chainlit UI 가동)
-chainlit run app/chainlit_ui.py -w
+chainlit run app/chainlit_ui.py -w --port 8080
 ```
 
 ---
 
 ### 4단계: Chat UI에서 복합 파이프라인 통합 테스트
 
-1. 웹 브라우저(`http://localhost:8000`)에 접속하여 **`supervisor`** 에이전트를 선택합니다.
+1. 웹 브라우저(`http://localhost:8080`)에 접속하여 **`supervisor`** 에이전트를 선택합니다.
 2. 채팅창에 **수집과 여러분의 서브 에이전트 작업이 결합된 복합 미션**을 요청합니다.
 
 #### 💬 요청 프롬프트 예시 (선택한 트랙에 맞게 변형 가능):
