@@ -57,25 +57,33 @@ async def run_scenario(scenario_file: str) -> dict:
 
     print("\n⏳ Scraper 에이전트 수행 중...\n")
     
-    final_report, agent_code = await stream_agent_execution(
-        agent_executor=scraper_agent,
-        mission_prompt=mission_prompt,
-        log_path=paths['log_path'],
-        structured_log_path=paths['structured_log_path'],
-        scenario_id=scenario.scenario_id,
-        run_id=paths['run_id'],
-        recursion_limit=100
-    )
-    
-    # 평가 및 채점
-    feedback = await evaluate_and_log(
-        scenario=scenario,
-        json_path=paths['json_path'],
-        final_report=final_report,
-        agent_code=agent_code,
-        log_path=paths['log_path'],
-        structured_log_path=paths['structured_log_path']
-    )
+    try:
+        final_report, agent_code = await stream_agent_execution(
+            agent_executor=scraper_agent,
+            mission_prompt=mission_prompt,
+            log_path=paths['log_path'],
+            structured_log_path=paths['structured_log_path'],
+            scenario_id=scenario.scenario_id,
+            run_id=paths['run_id'],
+            recursion_limit=100
+        )
+        
+        # 평가 및 채점
+        feedback = await evaluate_and_log(
+            scenario=scenario,
+            json_path=paths['json_path'],
+            final_report=final_report,
+            agent_code=agent_code,
+            log_path=paths['log_path'],
+            structured_log_path=paths['structured_log_path']
+        )
+    finally:
+        # SQLite 체크포인터 워커 스레드 정리 (종료 블로킹 방지)
+        if hasattr(scraper_agent, "checkpointer") and hasattr(scraper_agent.checkpointer, "conn"):
+            try:
+                await scraper_agent.checkpointer.conn.close()
+            except Exception:
+                pass
     
     return {
         "scenario_id": scenario.scenario_id,
