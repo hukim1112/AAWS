@@ -11,11 +11,10 @@
 
 | 구분 | v1.0 (Legacy) | v2.0 (Current) |
 | :--- | :--- | :--- |
-| **웹 UI 프론트엔드** | Streamlit (`app/ui.py`) | **Chainlit (`app/chainlit_ui.py`, 포트 `8080`) + React Custom Elements** |
-| **에이전트 라인업** | Navigator / Coder 2종 분리 | **Chatbot, Scraper, Supervisor, Analyst 4대 전문 에이전트 체계** |
-| **오케스트레이션** | 단순 동기식 메시지 라우팅 | **Event-Driven Reactive Wakeup & Long-Running 비동기 잡 오케스트레이션** |
-| **정보 공유 패턴** | 컨텍스트 오염 유발 | **Blackboard 패턴 (Planning 문서 및 `artifacts/` 디스크 기반 공유)** |
-| **브라우저 제어** | 개별 Playwright 인스턴스 | **`PlaywrightManager` CDP 공유 싱글턴 (L1/L2/L3 세션·쿠키 유지)** |
+| **웹 UI 프론트엔드** | Streamlit (`app/ui.py`) | **Chainlit (`app/chainlit_ui.py`, 포트 `8080`)** |
+| **에이전트 구성** | Navigator / Coder 분리 구조 | **Scraper 단일 전문 에이전트로 통합** |
+| **Supervisor 패턴** | 단순 메시지 라우팅 방식 | **Blackboard 패턴 (Planning 문서 공유로 정보격차 해소)** |
+| **브라우저 제어** | 개별 Playwright 인스턴스 | **`PlaywrightManager` CDP 공유 싱글턴 (세션/쿠키 유지)** |
 | **에이전트 프레임워크** | LangChain 구버전 파이프라인 | **LangChain 1.3+ / LangGraph 1.2+ / Python 3.12** |
 
 > 💡 **v1.0 (구버전) 코드가 필요한 경우:**  
@@ -130,35 +129,35 @@ AAWS/
 │   ├── Subagent.md                     # Dynamic Context Pruning, Blackboard 패턴, Sub-Agent Protocol
 │   ├── Long_running_agent.md           # Event-Driven Reactive Wakeup & 비동기 롱러닝 아키텍처
 │   └── Agent_Engineering_Principles.md # 도구 설계(Curated View), Prompt-as-Code, EDD 평가 하네스
-├── app/                    # 🧠 프로덕션 에이전트 시스템 코어 패키지
-│   ├── agents/             #   ├── 에이전트 팩토리 (4대 전문 에이전트)
-│   │   ├── chatbot.py      #   │   ├── 🤖 Chatbot (사용자 기억 기반 일상 대화)
-│   │   ├── scraper.py      #   │   ├── 🕷️ Scraper (L1/L2/L3 웹 탐색 및 고속 수집)
-│   │   ├── supervisor.py   #   │   ├── 👑 Supervisor (기획, 작업 위임, 결과 종합)
-│   │   └── analyst.py      #   │   └── 🔬 Analyst (통계 분석, 차트, 엑셀, HTML 대시보드)
-│   ├── tools/              #   ├── 에이전트 전용 도구 모음 (Tool Isolation)
-│   │   ├── common.py       #   │   ├── 범용 코딩/파일/검색 도구 10종 (file_read, bash_command 등)
-│   │   ├── navigator.py    #   │   ├── Playwright 웹 탐색 도구 6종 (extract_dom_skeleton 등) + PlaywrightManager
-│   │   ├── plan.py         #   │   ├── Supervisor 계획 도구 5종 (enter_plan, task_create 등)
-│   │   ├── supervisor_tools.py #   │├── 서브에이전트 오케스트레이션 도구 (invoke_sub_agent, get_sub_agent_job_status)
-│   │   └── analyst.py      #   │   └── 데이터 분석 도구 6종 (data_profiler, chart_generator, html_report 등)
-│   ├── prompts/            #   ├── Prompt-as-Code 독립 모듈 (SUPERVISOR, ANALYST, SCRAPER 등)
-│   ├── database/           #   ├── 사용자 기억(USER.md), SQLite 세션 DB
-│   ├── middleware/         #   ├── HITL(Human-in-the-Loop) 미들웨어
-│   ├── utils/              #   ├── LLM 초기화, 메시지 유틸, Chainlit DataLayer
-│   ├── server.py           #   ├── FastAPI 에이전트 API 서버 (비동기 BackgroundTasks & Job Runner)
-│   ├── chainlit_ui.py      #   ├── Chainlit 채팅 프론트엔드 (대시보드 사이드패널 팝업 & 액션 버튼)
-│   └── client.py           #   └── AsyncAgentClient (비동기 HTTP/Job 클라이언트 SDK)
-├── public/                 # 🎨 프론트엔드 커스텀 UI 에셋
-│   └── elements/
-│       └── HtmlDashboard.jsx #   └── Chainlit React 인터랙티브 HTML 대시보드 렌더러
-├── skills/                 # 📖 에이전트 도메인 스킬 (Analyst 디자인 토큰, 차트 패턴 등)
-├── evaluate/               # 🧪 시나리오 자동 평가 프레임워크 (EDD)
-│   ├── run_scraper_scenarios.py  #   ├── 평가 러너 (시나리오 순차 실행)
-│   ├── evaluator.py              #   ├── Dual Scoring (Schema Score + Strategy Score LLM-as-a-Judge)
+├── app/                    # 🧠 에이전트 시스템 코어 패키지
+│   ├── agents/             #   ├── 에이전트 팩토리 (chatbot, scraper, supervisor, analyst)
+│   ├── tools/              #   ├── 에이전트 도구 모음
+│   │   ├── common.py       #   │   ├── 범용 코딩/파일/검색 도구 10종
+│   │   ├── navigator.py    #   │   ├── Playwright 웹 탐색 도구 6종 + PlaywrightManager
+│   │   ├── plan.py         #   │   ├── Supervisor 계획 도구 5종
+│   │   ├── supervisor_tools.py #   │├── 서브에이전트 오케스트레이션 도구
+│   │   └── analyst.py      #   │   └── 데이터 분석 도구 6종
+│   ├── prompts/            #   ├── 에이전트별 시스템 프롬프트 (CHATBOT, SCRAPER, SUPERVISOR, ANALYST)
+│   ├── database/           #   ├── 사용자 기억(USER.md), 대화 DB
+│   ├── middleware/         #   ├── HITL 미들웨어
+│   ├── utils/              #   ├── LLM 초기화, 메시지 유틸, DB 레이어
+│   ├── server.py           #   ├── FastAPI 에이전트 API 서버
+│   ├── chainlit_ui.py      #   ├── Chainlit 채팅 프론트엔드
+│   ├── streamlit_ui.py     #   ├── Streamlit 채팅 프론트엔드
+│   └── client.py           #   └── 터미널 테스트 CLI 클라이언트
+├── public/                 # 🎨 프론트엔드 커스텀 UI 에셋 (HtmlDashboard.jsx)
+├── skills/                 # 📚 에이전트 스킬 정의
+├── evaluate/               # 🧪 시나리오 자동 평가 프레임워크
+│   ├── run_scraper_scenarios.py  #   ├── 평가 러너 (전체 시나리오 순차 실행)
+│   ├── evaluator.py              #   ├── LLM-as-a-Judge 채점 엔진
 │   ├── evaluate_config.yaml      #   ├── 실행할 시나리오 목록 설정
-│   └── scenario_parser.py        #   └── 시나리오 Frontmatter SSOT 파서
-├── artifacts/              # 📂 에이전트 산출물 저장소 (보고서, 차트, 대시보드, 엑셀)
+│   └── scenario_parser.py        #   └── 시나리오 마크다운 파서
+├── artifacts/              # 📂 에이전트 산출물 저장소
+│   ├── scenarios/          #   ├── 9개 난이도별 시나리오 명세서 (.md)
+│   ├── runs/               #   ├── 평가 실행 결과 (실험별 격리 저장, gitignored)
+│   ├── data/               #   ├── 에이전트가 수집한 데이터 (gitignored)
+│   └── code/, notebooks/   #   └── 노트북 실습용 샘플 데이터
+├── configs/                # ⚙️ HITL, 로깅 등 런타임 설정
 ├── install/                # 🔧 환경 설치 스크립트 모음
 ├── start_vnc.sh            # 🖥️ VNC + noVNC 구동 스크립트
 └── README.md               # 📖 프로젝트 메인 명세서
@@ -179,7 +178,7 @@ python app/server.py --port 8000
 
 ### 2. Chainlit 채팅 UI 가동 — 터미널 ②
 ```bash
-chainlit run app/chainlit_ui.py --port 8080
+chainlit run app/chainlit_ui.py -w --port 8080
 ```
 * 웹 브라우저에서 `http://localhost:8080`에 접속하여 에이전트를 선택하고 대화합니다.
 * 로그인: `user` / `1234`
