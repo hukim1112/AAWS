@@ -65,14 +65,17 @@ sequenceDiagram
     Note over Ana: 2분 뒤... 백그라운드 분석 및 HTML 대시보드 생성 완료!
     Ana-->>API: [TASK REPORT] 산출물 및 완료 보고서 반환
 
-    API->>UI: 🔔 "[백그라운드 작업 완료] Analyst 작업이 끝났습니다." 알림
-    
     Note over API,Sup: 🌟 핵심: 서버가 Supervisor를 자동 실행(Wakeup)하여 결과 주입!
     API->>Sup: [SYSTEM NOTIFICATION: SUB-AGENT COMPLETED]\nReport: [TASK REPORT]...
     
     Note over Sup: Supervisor가 결과를 읽고 후속 분석 및 대시보드 렌더링 수행
-    Sup-->>UI: 👑 "Analyst 분석이 완료되었습니다. 결과 요약과 대시보드입니다."<br/>+ <Render_HTML>대시보드</Render_HTML> (사이드 패널 팝업!)
+    Sup-->>API: 👑 최종 보고서 작성 & job_store에 supervisor_response 기록 완료
+
+    Note over UI,API: 💡 UI 세션 모니터링: GET /sessions/{thread_id}/jobs 주기적 조회
+    API-->>UI: 🔔 "[백그라운드 작업 완료] 알림" + Supervisor 최종 보고서/대시보드 자동 렌더링!
 ```
+
+> **💡 UI 연동 핵심 팁**: 프론트엔드(Chainlit)는 대화 세션(`thread_id`)을 기준으로 서버의 `GET /sessions/{thread_id}/jobs` 엔드포인트를 주기적으로 확인(Session Monitoring)합니다. 이를 통해 서브에이전트가 완료되고 Supervisor의 Wakeup 응답(`supervisor_response`)이 준비되는 즉시 사용자 개입 없이 화면에 결과와 시각화 대시보드를 띄워줍니다.
 
 ---
 
@@ -126,6 +129,29 @@ async def submit_agent_job(
     # 백그라운드 코루틴 등록
     background_tasks.add_task(_run_agent_job, job_id, agent_name, input_data, request.app)
     return {"job_id": job_id, "status": "SUBMITTED", "agent_name": agent_name}
+```
+
+### Job 조회 엔드포인트 (`GET /jobs/{job_id}` & `GET /sessions/{thread_id}/jobs`)
+
+단건 작업 조회와 세션 단위 전체 작업 조회를 제공하여, Supervisor 도구 및 UI 모니터링이 단일 진실 소스(Single Source of Truth)로부터 상태를 조회할 수 있게 합니다:
+
+```python
+@app.get("/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    """특정 작업의 진행 상태와 결과(및 Supervisor 후속 보고서)를 조회합니다."""
+    job = job_store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return job
+
+@app.get("/sessions/{thread_id}/jobs")
+async def list_session_jobs(thread_id: str):
+    """특정 세션(thread)에 연관된 모든 백그라운드 작업 목록을 반환합니다.
+    UI에서 연쇄적으로 생성된 백그라운드 작업까지 한 번에 모니터링할 때 사용됩니다."""
+    return [
+        job for job in job_store.values()
+        if job.get("callback_thread_id") == thread_id
+    ]
 ```
 
 ---
