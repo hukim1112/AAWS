@@ -13,6 +13,7 @@ import uuid
 import re
 import json
 import html
+import asyncio
 import chainlit as cl
 from chainlit.types import ThreadDict
 from typing import Dict, Any, Optional, List
@@ -133,10 +134,12 @@ async def _process_sse_stream(
     stream_generator,
     final_message: cl.Message,
     active_steps: Dict[str, cl.Step],
+    detected_jobs: Optional[List[dict]] = None,
 ) -> Optional[dict]:
     """
     SSE 이벤트를 순회하며 cl.Step / stream_token으로 렌더링합니다.
     interrupt 이벤트가 발생하면 해당 이벤트를 반환하고, 없으면 None을 반환합니다.
+    tool_end 이벤트에서 [JOB SUBMITTED] 패턴을 감지하면 detected_jobs에 추가합니다.
     """
     async for event in stream_generator:
         event_type = event.get("type")
@@ -155,12 +158,22 @@ async def _process_sse_stream(
         # 2. 도구 호출 완료
         elif event_type == "tool_end":
             run_id = event.get("run_id", "")
+            tool_output = event.get("output", "")
             if run_id in active_steps:
                 step = active_steps[run_id]
-                tool_output = event.get("output", "")
                 step.output = sanitize_text(str(tool_output))
                 await step.update()
                 del active_steps[run_id]
+
+            # 백그라운드 Job 제출 감지: [JOB SUBMITTED] 패턴에서 job_id와 agent명 추출
+            if detected_jobs is not None and "[JOB SUBMITTED]" in str(tool_output):
+                job_match = re.search(r"Job ID:\s*(job_\w+)", str(tool_output))
+                agent_match = re.search(r"Sub-Agent:\s*(\w+)", str(tool_output))
+                if job_match:
+                    detected_jobs.append({
+                        "job_id": job_match.group(1),
+                        "agent": agent_match.group(1) if agent_match else "unknown",
+                    })
 
         # 3. 모델 토큰 스트리밍
         elif event_type == "token":
@@ -268,19 +281,149 @@ async def on_reopen_dashboard(action: cl.Action):
         ).send()
 
 
-# ── 8. 메시지 처리 (FastAPI SSE 스트리밍 + HITL 연쇄 루프) ────
+# ── 8. Render_* 태그 파싱 및 메시지 렌더링 공통 함수 ──────────
+async def _render_agent_response(raw_content: str, author: str = "Agent Assistant") -> None:
+    """
+    에이전트 응답 텍스트에서 Render_Image/HTML/File 태그를 파싱하여
+    elements/actions와 함께 cl.Message를 생성·전송합니다.
+    on_message와 _poll_and_render_job 모두에서 재사용됩니다.
+    """
+    elements = []
+    actions = []
+    clean_content = raw_content
+
+    # (1) <Render_Image>...</Render_Image> 처리
+    image_matches = re.findall(r"<Render_Image>(.*?)</Render_Image>", raw_content)
+    for raw_img in image_matches:
+        resolved_p = _resolve_existing_path(raw_img)
+        if resolved_p:
+            elements.append(cl.Image(name=os.path.basename(resolved_p), path=resolved_p, display="inline"))
+        clean_content = clean_content.replace(f"<Render_Image>{raw_img}</Render_Image>", "")
+
+    # (2) 마크다운 이미지 fallback 파싱: ![...](path)
+    md_image_matches = re.findall(r"!\[(.*?)\]\((.*?)\)", clean_content)
+    for alt_text, raw_img in md_image_matches:
+        resolved_p = _resolve_existing_path(raw_img)
+        if resolved_p:
+            elements.append(cl.Image(name=alt_text or os.path.basename(resolved_p), path=resolved_p, display="inline"))
+            clean_content = clean_content.replace(f"![{alt_text}]({raw_img})", "")
+
+    # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — Blob URL 방식)
+    html_matches = re.findall(r"<Render_HTML>(.*?)</Render_HTML>", raw_content)
+    for raw_html in html_matches:
+        resolved_p = _resolve_existing_path(raw_html)
+        if resolved_p:
+            fname = os.path.basename(resolved_p)
+            try:
+                with open(resolved_p, "r", encoding="utf-8") as f:
+                    html_content = f.read()
+            except Exception as e:
+                html_content = f"<html><body><h2>⚠️ 대시보드 파일 읽기 실패</h2><p>{e}</p></body></html>"
+
+            elements.append(cl.CustomElement(
+                name="HtmlDashboard",
+                props={"html_content": html_content, "title": fname, "height": "80vh"},
+                display="side",
+            ))
+            actions.append(cl.Action(
+                name="reopen_dashboard",
+                label=f"📊 {fname} 사이드 패널 열기",
+                payload={"html_content": html_content, "title": fname}
+            ))
+            clean_content = clean_content.replace(
+                f"<Render_HTML>{raw_html}</Render_HTML>",
+                f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(우측 사이드 패널에 표시됩니다. 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
+            )
+        else:
+            clean_content = clean_content.replace(f"<Render_HTML>{raw_html}</Render_HTML>", "")
+
+    # (4) <Render_File>...</Render_File> 처리 (Excel, CSV 등 다운로드 파일)
+    file_matches = re.findall(r"<Render_File>(.*?)</Render_File>", raw_content)
+    for raw_f in file_matches:
+        resolved_p = _resolve_existing_path(raw_f)
+        if resolved_p:
+            fname = os.path.basename(resolved_p)
+            elements.append(cl.File(name=fname, path=resolved_p))
+            clean_content = clean_content.replace(
+                f"<Render_File>{raw_f}</Render_File>",
+                f"\n\n> 📊 **보고서 파일 첨부됨**: `{fname}`\n\n"
+            )
+        else:
+            clean_content = clean_content.replace(f"<Render_File>{raw_f}</Render_File>", "")
+
+    # 메시지 조립 및 전송
+    msg = cl.Message(content=clean_content.strip(), author=author)
+    if elements:
+        msg.elements = elements
+    if actions:
+        msg.actions = actions
+    await msg.send()
+
+
+# ── 9. 백그라운드 Job 폴링 및 자동 렌더링 ────────────────────
+async def _poll_and_render_job(job_id: str, agent_name: str) -> None:
+    """
+    백그라운드 작업 완료를 폴링하고, 완료 시 supervisor_response를 Chainlit UI에 자동 렌더링합니다.
+    server.py의 Reactive Wakeup이 생성한 supervisor_response를 가져와 표시합니다.
+    """
+    MAX_WAIT = 600  # 10분 타임아웃
+    INTERVAL = 3    # 3초 간격
+
+    for _ in range(MAX_WAIT // INTERVAL):
+        await asyncio.sleep(INTERVAL)
+        try:
+            job = await api_client.get_job(job_id)
+        except Exception:
+            continue
+
+        status = job.get("status", "")
+        if status in ("SUCCESS", "FAILED"):
+            # supervisor_response가 아직 생성 중일 수 있으므로 (reactive wakeup 진행 중)
+            # SUCCESS이더라도 supervisor_response가 없으면 좀 더 기다림
+            if status == "SUCCESS" and not job.get("supervisor_response"):
+                continue
+
+            # 1) 간단한 완료 알림
+            status_emoji = "✅" if status == "SUCCESS" else "❌"
+            await cl.Message(
+                content=f"{status_emoji} **백그라운드 작업 완료**: `{agent_name}` (Job: `{job_id}`)",
+                author="System"
+            ).send()
+
+            # 2) supervisor_response가 있으면 Render_* 태그 파싱 후 전체 렌더링
+            sup_response = job.get("supervisor_response")
+            if sup_response:
+                await _render_agent_response(sup_response)
+            elif status == "FAILED":
+                error_msg = job.get("error", "알 수 없는 오류")
+                await cl.Message(
+                    content=f"❌ **작업 실패 상세**: {error_msg}",
+                    author="System"
+                ).send()
+            return
+
+    # 타임아웃
+    await cl.Message(
+        content=f"⏰ 백그라운드 작업 `{job_id}` (`{agent_name}`)이 10분 내 완료되지 않았습니다.",
+        author="System"
+    ).send()
+
+
+# ── 10. 메시지 처리 (FastAPI SSE 스트리밍 + HITL 연쇄 루프 + 백그라운드 Job 감시) ──
 @cl.on_message
 async def on_message(message: cl.Message):
     """
     사용자 메시지를 FastAPI 백엔드로 전달하고,
     SSE 스트림 이벤트를 수신하여 cl.Step / stream_token으로 렌더링합니다.
     HITL interrupt가 발생하면 사용자에게 결정을 요청하고 resume합니다.
+    백그라운드 Job이 감지되면 폴링 태스크를 생성하여 완료 시 자동 렌더링합니다.
     """
     profile = cl.user_session.get("chat_profile") or "chatbot"
     thread_id = cl.context.session.thread_id or str(uuid.uuid4())
 
     final_message = cl.Message(content="")
     active_steps: Dict[str, cl.Step] = {}
+    detected_jobs: List[dict] = []  # 백그라운드 Job 감지용
 
     try:
         # 1. 초기 스트림
@@ -288,6 +431,7 @@ async def on_message(message: cl.Message):
             api_client.stream(profile, message.content, thread_id),
             final_message,
             active_steps,
+            detected_jobs,
         )
 
         # 2. HITL interrupt 연쇄 루프
@@ -299,92 +443,103 @@ async def on_message(message: cl.Message):
                 api_client.resume(profile, thread_id, decisions),
                 final_message,
                 active_steps,
+                detected_jobs,
             )
 
-        # 3. 미디어 및 파일 태그 파싱 (<Render_Image>, <Render_HTML>, <Render_File> + fallback)
+        # 3. Render_* 태그 파싱 및 최종 메시지 렌더링
         raw_content = final_message.content or ""
-        elements = []
-        actions = []
-        clean_content = raw_content
+        if raw_content.strip():
+            # 스트리밍된 내용이 있으면 Render_* 파싱 후 표시
+            await _render_streamed_message(final_message, raw_content)
 
-        # (1) <Render_Image>...</Render_Image> 처리
-        image_matches = re.findall(r"<Render_Image>(.*?)</Render_Image>", raw_content)
-        for raw_img in image_matches:
-            resolved_p = _resolve_existing_path(raw_img)
-            if resolved_p:
-                elements.append(cl.Image(name=os.path.basename(resolved_p), path=resolved_p, display="inline"))
-            clean_content = clean_content.replace(f"<Render_Image>{raw_img}</Render_Image>", "")
-
-        # (2) 마크다운 이미지 fallback 파싱: ![...](path)
-        md_image_matches = re.findall(r"!\[(.*?)\]\((.*?)\)", clean_content)
-        for alt_text, raw_img in md_image_matches:
-            resolved_p = _resolve_existing_path(raw_img)
-            if resolved_p:
-                elements.append(cl.Image(name=alt_text or os.path.basename(resolved_p), path=resolved_p, display="inline"))
-                # 본문에서 깨지는 마크다운 엑박 태그 제거
-                clean_content = clean_content.replace(f"![{alt_text}]({raw_img})", "")
-
-        # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — Blob URL 방식)
-        # HTML 파일을 서버에서 직접 읽어 props로 전달 → React에서 Blob URL로 렌더링
-        # 이 방식은 localhost와 Codespaces 모두에서 네트워크 요청 없이 동작합니다.
-        html_matches = re.findall(r"<Render_HTML>(.*?)</Render_HTML>", raw_content)
-        for raw_html in html_matches:
-            resolved_p = _resolve_existing_path(raw_html)
-            if resolved_p:
-                fname = os.path.basename(resolved_p)
-                # HTML 파일 내용을 직접 읽어 props로 전달 (Blob URL 렌더링용)
-                try:
-                    with open(resolved_p, "r", encoding="utf-8") as f:
-                        html_content = f.read()
-                except Exception as e:
-                    html_content = f"<html><body><h2>⚠️ 대시보드 파일 읽기 실패</h2><p>{e}</p></body></html>"
-
-                elements.append(cl.CustomElement(
-                    name="HtmlDashboard",
-                    props={"html_content": html_content, "title": fname, "height": "80vh"},
-                    display="side",
-                ))
-
-                # 패널을 닫은 후에도 원클릭으로 다시 열 수 있는 Action 버튼 추가
-                actions.append(cl.Action(
-                    name="reopen_dashboard",
-                    label=f"📊 {fname} 사이드 패널 열기",
-                    payload={"html_content": html_content, "title": fname}
-                ))
-
-                clean_content = clean_content.replace(
-                    f"<Render_HTML>{raw_html}</Render_HTML>",
-                    f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(우측 사이드 패널에 표시됩니다. 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
-                )
-            else:
-                clean_content = clean_content.replace(f"<Render_HTML>{raw_html}</Render_HTML>", "")
-
-        # (4) <Render_File>...</Render_File> 처리 (Excel, CSV 등 다운로드 파일)
-        file_matches = re.findall(r"<Render_File>(.*?)</Render_File>", raw_content)
-        for raw_f in file_matches:
-            resolved_p = _resolve_existing_path(raw_f)
-            if resolved_p:
-                fname = os.path.basename(resolved_p)
-                elements.append(cl.File(name=fname, path=resolved_p))
-                clean_content = clean_content.replace(
-                    f"<Render_File>{raw_f}</Render_File>",
-                    f"\n\n> 📊 **보고서 파일 첨부됨**: `{fname}`\n\n"
-                )
-            else:
-                clean_content = clean_content.replace(f"<Render_File>{raw_f}</Render_File>", "")
-
-        # 본문 텍스트 정리 및 elements/actions 연결
-        final_message.content = clean_content.strip()
-        if elements:
-            final_message.elements = elements
-        if actions:
-            final_message.actions = actions
-
-        # 스트리밍된 메시지는 update()로 화면을 갱신해야 elements가 즉시 표시됨
-        if final_message.id:
-            await final_message.update()
-        else:
-            await final_message.send()
+        # 4. 백그라운드 Job 감지 시 폴링 태스크 생성
+        for job_info in detected_jobs:
+            asyncio.create_task(
+                _poll_and_render_job(job_info["job_id"], job_info["agent"])
+            )
 
     except Exception as e:
         await cl.Message(content=f"❌ **에러가 발생했습니다:** {str(e)}").send()
+
+
+async def _render_streamed_message(final_message: cl.Message, raw_content: str) -> None:
+    """
+    on_message에서 SSE 스트리밍으로 수신된 메시지에 대해
+    Render_* 태그를 인라인 파싱하여 elements/actions를 연결합니다.
+    _render_agent_response와 달리 기존 final_message 객체를 업데이트합니다.
+    """
+    elements = []
+    actions = []
+    clean_content = raw_content
+
+    # (1) <Render_Image>...</Render_Image> 처리
+    image_matches = re.findall(r"<Render_Image>(.*?)</Render_Image>", raw_content)
+    for raw_img in image_matches:
+        resolved_p = _resolve_existing_path(raw_img)
+        if resolved_p:
+            elements.append(cl.Image(name=os.path.basename(resolved_p), path=resolved_p, display="inline"))
+        clean_content = clean_content.replace(f"<Render_Image>{raw_img}</Render_Image>", "")
+
+    # (2) 마크다운 이미지 fallback 파싱: ![...](path)
+    md_image_matches = re.findall(r"!\[(.*?)\]\((.*?)\)", clean_content)
+    for alt_text, raw_img in md_image_matches:
+        resolved_p = _resolve_existing_path(raw_img)
+        if resolved_p:
+            elements.append(cl.Image(name=alt_text or os.path.basename(resolved_p), path=resolved_p, display="inline"))
+            clean_content = clean_content.replace(f"![{alt_text}]({raw_img})", "")
+
+    # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — Blob URL 방식)
+    html_matches = re.findall(r"<Render_HTML>(.*?)</Render_HTML>", raw_content)
+    for raw_html in html_matches:
+        resolved_p = _resolve_existing_path(raw_html)
+        if resolved_p:
+            fname = os.path.basename(resolved_p)
+            try:
+                with open(resolved_p, "r", encoding="utf-8") as f:
+                    html_content = f.read()
+            except Exception as e:
+                html_content = f"<html><body><h2>⚠️ 대시보드 파일 읽기 실패</h2><p>{e}</p></body></html>"
+
+            elements.append(cl.CustomElement(
+                name="HtmlDashboard",
+                props={"html_content": html_content, "title": fname, "height": "80vh"},
+                display="side",
+            ))
+            actions.append(cl.Action(
+                name="reopen_dashboard",
+                label=f"📊 {fname} 사이드 패널 열기",
+                payload={"html_content": html_content, "title": fname}
+            ))
+            clean_content = clean_content.replace(
+                f"<Render_HTML>{raw_html}</Render_HTML>",
+                f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(우측 사이드 패널에 표시됩니다. 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
+            )
+        else:
+            clean_content = clean_content.replace(f"<Render_HTML>{raw_html}</Render_HTML>", "")
+
+    # (4) <Render_File>...</Render_File> 처리 (Excel, CSV 등 다운로드 파일)
+    file_matches = re.findall(r"<Render_File>(.*?)</Render_File>", raw_content)
+    for raw_f in file_matches:
+        resolved_p = _resolve_existing_path(raw_f)
+        if resolved_p:
+            fname = os.path.basename(resolved_p)
+            elements.append(cl.File(name=fname, path=resolved_p))
+            clean_content = clean_content.replace(
+                f"<Render_File>{raw_f}</Render_File>",
+                f"\n\n> 📊 **보고서 파일 첨부됨**: `{fname}`\n\n"
+            )
+        else:
+            clean_content = clean_content.replace(f"<Render_File>{raw_f}</Render_File>", "")
+
+    # 본문 텍스트 정리 및 elements/actions 연결
+    final_message.content = clean_content.strip()
+    if elements:
+        final_message.elements = elements
+    if actions:
+        final_message.actions = actions
+
+    # 스트리밍된 메시지는 update()로 화면을 갱신해야 elements가 즉시 표시됨
+    if final_message.id:
+        await final_message.update()
+    else:
+        await final_message.send()
