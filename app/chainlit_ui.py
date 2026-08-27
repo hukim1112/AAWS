@@ -340,7 +340,10 @@ async def _render_agent_response(raw_content: str, author: str = "Agent Assistan
             clean_content = clean_content.replace(f"<Render_File>{raw_f}</Render_File>", "")
 
     # 메시지 조립 및 전송
-    msg = cl.Message(content=clean_content.strip(), author=author)
+    final_content = clean_content.strip()
+    if not final_content:
+        final_content = "📋 결과가 생성되었습니다."  # 빈 content 방지 (Chainlit 프론트엔드 null 에러 방어)
+    msg = cl.Message(content=final_content, author=author)
     if elements:
         msg.elements = elements
     if actions:
@@ -556,7 +559,10 @@ async def _render_streamed_message(final_message: cl.Message, raw_content: str) 
             clean_content = clean_content.replace(f"<Render_File>{raw_f}</Render_File>", "")
 
     # 본문 텍스트 정리 및 elements/actions 연결
-    final_message.content = clean_content.strip()
+    final_content = clean_content.strip()
+    if not final_content:
+        final_content = "📋 결과가 생성되었습니다."
+    final_message.content = final_content
     if elements:
         final_message.elements = elements
     if actions:
