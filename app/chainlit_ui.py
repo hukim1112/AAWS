@@ -349,6 +349,8 @@ async def _render_agent_response(raw_content: str, author: str = "Agent Assistan
 
 
 # ── 9. 세션 단위 백그라운드 Job 모니터링 ──────────────────────
+_active_monitors: set = set()  # 세션당 모니터 중복 방지 (thread_id 추적)
+
 async def _monitor_session_jobs(thread_id: str) -> None:
     """
     세션(thread)에 연관된 모든 백그라운드 Job을 주기적으로 조회하여,
@@ -356,67 +358,76 @@ async def _monitor_session_jobs(thread_id: str) -> None:
 
     개별 Job이 아닌 세션 전체를 감시하므로, Reactive Wakeup 내부에서
     연쇄적으로 생성된 Job도 자동 감지됩니다.
+    세션당 1개의 모니터만 실행됩니다.
     """
-    MAX_WAIT = 600  # 10분 타임아웃
-    INTERVAL = 3    # 3초 간격
-    rendered_jobs: set = set()  # 이미 렌더링한 Job ID 추적
+    # 이미 이 세션을 모니터링 중이면 중복 실행 방지
+    if thread_id in _active_monitors:
+        return
+    _active_monitors.add(thread_id)
 
-    for _ in range(MAX_WAIT // INTERVAL):
-        await asyncio.sleep(INTERVAL)
-        try:
-            jobs = await api_client.get_session_jobs(thread_id)
-        except Exception:
-            continue
+    try:
+        MAX_WAIT = 600  # 10분 타임아웃
+        INTERVAL = 3    # 3초 간격
+        rendered_jobs: set = set()  # 이미 렌더링한 Job ID 추적
 
-        all_done = True  # 모든 Job이 완료되었는지 추적
-
-        for job in jobs:
-            job_id = job.get("job_id", "")
-            status = job.get("status", "")
-            agent_name = job.get("agent_name", "unknown")
-
-            # 아직 진행 중인 Job이 있으면 계속 모니터링
-            if status in ("SUBMITTED", "RUNNING"):
-                all_done = False
+        for _ in range(MAX_WAIT // INTERVAL):
+            await asyncio.sleep(INTERVAL)
+            try:
+                jobs = await api_client.get_session_jobs(thread_id)
+            except Exception:
                 continue
 
-            # 이미 렌더링한 Job은 스킵
-            if job_id in rendered_jobs:
-                continue
+            all_done = True  # 모든 Job이 완료되었는지 추적
 
-            # SUCCESS인데 supervisor_response가 아직 없으면 대기 (reactive wakeup 진행 중)
-            if status == "SUCCESS" and not job.get("supervisor_response"):
-                all_done = False
-                continue
+            for job in jobs:
+                job_id = job.get("job_id", "")
+                status = job.get("status", "")
+                agent_name = job.get("agent_name", "unknown")
 
-            # 완료 알림
-            rendered_jobs.add(job_id)
-            status_emoji = "✅" if status == "SUCCESS" else "❌"
-            await cl.Message(
-                content=f"{status_emoji} **백그라운드 작업 완료**: `{agent_name}` (Job: `{job_id}`)",
-                author="System"
-            ).send()
+                # 아직 진행 중인 Job이 있으면 계속 모니터링
+                if status in ("SUBMITTED", "RUNNING"):
+                    all_done = False
+                    continue
 
-            # supervisor_response 렌더링
-            sup_response = job.get("supervisor_response")
-            if sup_response:
-                await _render_agent_response(sup_response)
-            elif status == "FAILED":
-                error_msg = job.get("error", "알 수 없는 오류")
+                # 이미 렌더링한 Job은 스킵
+                if job_id in rendered_jobs:
+                    continue
+
+                # SUCCESS인데 supervisor_response가 아직 없으면 대기 (reactive wakeup 진행 중)
+                if status == "SUCCESS" and not job.get("supervisor_response"):
+                    all_done = False
+                    continue
+
+                # 완료 알림
+                rendered_jobs.add(job_id)
+                status_emoji = "✅" if status == "SUCCESS" else "❌"
                 await cl.Message(
-                    content=f"❌ **작업 실패 상세**: {error_msg}",
+                    content=f"{status_emoji} **백그라운드 작업 완료**: `{agent_name}` (Job: `{job_id}`)",
                     author="System"
                 ).send()
 
-        # 모든 Job이 완료되었으면 모니터링 종료
-        if all_done and jobs:
-            return
+                # supervisor_response 렌더링
+                sup_response = job.get("supervisor_response")
+                if sup_response:
+                    await _render_agent_response(sup_response)
+                elif status == "FAILED":
+                    error_msg = job.get("error", "알 수 없는 오류")
+                    await cl.Message(
+                        content=f"❌ **작업 실패 상세**: {error_msg}",
+                        author="System"
+                    ).send()
 
-    # 타임아웃
-    await cl.Message(
-        content=f"⏰ 세션 백그라운드 작업이 10분 내 모두 완료되지 않았습니다.",
-        author="System"
-    ).send()
+            # 모든 Job이 완료되었으면 모니터링 종료
+            if all_done and jobs:
+                return
+
+        # 타임아웃
+        await cl.Message(
+            content=f"⏰ 세션 백그라운드 작업이 10분 내 모두 완료되지 않았습니다.",
+            author="System"
+        ).send()
+    finally:
+        _active_monitors.discard(thread_id)
 
 
 # ── 10. 메시지 처리 (FastAPI SSE 스트리밍 + HITL 연쇄 루프 + 세션 Job 모니터) ──
