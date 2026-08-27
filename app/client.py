@@ -140,6 +140,19 @@ class AsyncAgentClient:
             except httpx.HTTPError as e:
                 return {"status": "error", "message": str(e)}
 
+    async def get_session_jobs(self, thread_id: str) -> list:
+        """
+        GET /sessions/{thread_id}/jobs — 세션에 연관된 모든 백그라운드 작업을 조회합니다.
+        """
+        url = f"{self.base_url}/sessions/{thread_id}/jobs"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                response = await client.get(url)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                return []
+
     async def get_messages(self, session_id: str) -> list:
         """
         GET /sessions/{session_id}/messages — 세션의 대화 이력을 조회합니다.

@@ -399,6 +399,16 @@ async def list_jobs():
     """모든 백그라운드 작업 목록을 조회합니다."""
     return list(job_store.values())
 
+
+@app.get("/sessions/{thread_id}/jobs")
+async def list_session_jobs(thread_id: str):
+    """특정 세션(thread)에 연관된 모든 백그라운드 작업 목록을 반환합니다.
+    callback_thread_id로 필터링하여 해당 대화 세션에서 생성된 Job만 조회합니다."""
+    return [
+        job for job in job_store.values()
+        if job.get("callback_thread_id") == thread_id
+    ]
+
 @app.post("/agents/{agent_name}/stream")
 async def stream_agent(agent_name: str, input_data: StreamInput, request: Request):
     try:

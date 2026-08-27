@@ -134,12 +134,10 @@ async def _process_sse_stream(
     stream_generator,
     final_message: cl.Message,
     active_steps: Dict[str, cl.Step],
-    detected_jobs: Optional[List[dict]] = None,
 ) -> Optional[dict]:
     """
     SSE 이벤트를 순회하며 cl.Step / stream_token으로 렌더링합니다.
     interrupt 이벤트가 발생하면 해당 이벤트를 반환하고, 없으면 None을 반환합니다.
-    tool_end 이벤트에서 [JOB SUBMITTED] 패턴을 감지하면 detected_jobs에 추가합니다.
     """
     async for event in stream_generator:
         event_type = event.get("type")
@@ -158,22 +156,12 @@ async def _process_sse_stream(
         # 2. 도구 호출 완료
         elif event_type == "tool_end":
             run_id = event.get("run_id", "")
-            tool_output = event.get("output", "")
             if run_id in active_steps:
                 step = active_steps[run_id]
+                tool_output = event.get("output", "")
                 step.output = sanitize_text(str(tool_output))
                 await step.update()
                 del active_steps[run_id]
-
-            # 백그라운드 Job 제출 감지: [JOB SUBMITTED] 패턴에서 job_id와 agent명 추출
-            if detected_jobs is not None and "[JOB SUBMITTED]" in str(tool_output):
-                job_match = re.search(r"Job ID:\s*(job_\w+)", str(tool_output))
-                agent_match = re.search(r"Sub-Agent:\s*(\w+)", str(tool_output))
-                if job_match:
-                    detected_jobs.append({
-                        "job_id": job_match.group(1),
-                        "agent": agent_match.group(1) if agent_match else "unknown",
-                    })
 
         # 3. 모델 토큰 스트리밍
         elif event_type == "token":
@@ -360,37 +348,56 @@ async def _render_agent_response(raw_content: str, author: str = "Agent Assistan
     await msg.send()
 
 
-# ── 9. 백그라운드 Job 폴링 및 자동 렌더링 ────────────────────
-async def _poll_and_render_job(job_id: str, agent_name: str) -> None:
+# ── 9. 세션 단위 백그라운드 Job 모니터링 ──────────────────────
+async def _monitor_session_jobs(thread_id: str) -> None:
     """
-    백그라운드 작업 완료를 폴링하고, 완료 시 supervisor_response를 Chainlit UI에 자동 렌더링합니다.
-    server.py의 Reactive Wakeup이 생성한 supervisor_response를 가져와 표시합니다.
+    세션(thread)에 연관된 모든 백그라운드 Job을 주기적으로 조회하여,
+    새로 완료된 작업의 supervisor_response를 자동으로 Chainlit UI에 렌더링합니다.
+
+    개별 Job이 아닌 세션 전체를 감시하므로, Reactive Wakeup 내부에서
+    연쇄적으로 생성된 Job도 자동 감지됩니다.
     """
     MAX_WAIT = 600  # 10분 타임아웃
     INTERVAL = 3    # 3초 간격
+    rendered_jobs: set = set()  # 이미 렌더링한 Job ID 추적
 
     for _ in range(MAX_WAIT // INTERVAL):
         await asyncio.sleep(INTERVAL)
         try:
-            job = await api_client.get_job(job_id)
+            jobs = await api_client.get_session_jobs(thread_id)
         except Exception:
             continue
 
-        status = job.get("status", "")
-        if status in ("SUCCESS", "FAILED"):
-            # supervisor_response가 아직 생성 중일 수 있으므로 (reactive wakeup 진행 중)
-            # SUCCESS이더라도 supervisor_response가 없으면 좀 더 기다림
-            if status == "SUCCESS" and not job.get("supervisor_response"):
+        all_done = True  # 모든 Job이 완료되었는지 추적
+
+        for job in jobs:
+            job_id = job.get("job_id", "")
+            status = job.get("status", "")
+            agent_name = job.get("agent_name", "unknown")
+
+            # 아직 진행 중인 Job이 있으면 계속 모니터링
+            if status in ("SUBMITTED", "RUNNING"):
+                all_done = False
                 continue
 
-            # 1) 간단한 완료 알림
+            # 이미 렌더링한 Job은 스킵
+            if job_id in rendered_jobs:
+                continue
+
+            # SUCCESS인데 supervisor_response가 아직 없으면 대기 (reactive wakeup 진행 중)
+            if status == "SUCCESS" and not job.get("supervisor_response"):
+                all_done = False
+                continue
+
+            # 완료 알림
+            rendered_jobs.add(job_id)
             status_emoji = "✅" if status == "SUCCESS" else "❌"
             await cl.Message(
                 content=f"{status_emoji} **백그라운드 작업 완료**: `{agent_name}` (Job: `{job_id}`)",
                 author="System"
             ).send()
 
-            # 2) supervisor_response가 있으면 Render_* 태그 파싱 후 전체 렌더링
+            # supervisor_response 렌더링
             sup_response = job.get("supervisor_response")
             if sup_response:
                 await _render_agent_response(sup_response)
@@ -400,30 +407,32 @@ async def _poll_and_render_job(job_id: str, agent_name: str) -> None:
                     content=f"❌ **작업 실패 상세**: {error_msg}",
                     author="System"
                 ).send()
+
+        # 모든 Job이 완료되었으면 모니터링 종료
+        if all_done and jobs:
             return
 
     # 타임아웃
     await cl.Message(
-        content=f"⏰ 백그라운드 작업 `{job_id}` (`{agent_name}`)이 10분 내 완료되지 않았습니다.",
+        content=f"⏰ 세션 백그라운드 작업이 10분 내 모두 완료되지 않았습니다.",
         author="System"
     ).send()
 
 
-# ── 10. 메시지 처리 (FastAPI SSE 스트리밍 + HITL 연쇄 루프 + 백그라운드 Job 감시) ──
+# ── 10. 메시지 처리 (FastAPI SSE 스트리밍 + HITL 연쇄 루프 + 세션 Job 모니터) ──
 @cl.on_message
 async def on_message(message: cl.Message):
     """
     사용자 메시지를 FastAPI 백엔드로 전달하고,
     SSE 스트림 이벤트를 수신하여 cl.Step / stream_token으로 렌더링합니다.
     HITL interrupt가 발생하면 사용자에게 결정을 요청하고 resume합니다.
-    백그라운드 Job이 감지되면 폴링 태스크를 생성하여 완료 시 자동 렌더링합니다.
+    SSE 완료 후 세션에 활성 Job이 있으면 세션 모니터를 시작합니다.
     """
     profile = cl.user_session.get("chat_profile") or "chatbot"
     thread_id = cl.context.session.thread_id or str(uuid.uuid4())
 
     final_message = cl.Message(content="")
     active_steps: Dict[str, cl.Step] = {}
-    detected_jobs: List[dict] = []  # 백그라운드 Job 감지용
 
     try:
         # 1. 초기 스트림
@@ -431,7 +440,6 @@ async def on_message(message: cl.Message):
             api_client.stream(profile, message.content, thread_id),
             final_message,
             active_steps,
-            detected_jobs,
         )
 
         # 2. HITL interrupt 연쇄 루프
@@ -443,20 +451,25 @@ async def on_message(message: cl.Message):
                 api_client.resume(profile, thread_id, decisions),
                 final_message,
                 active_steps,
-                detected_jobs,
             )
 
         # 3. Render_* 태그 파싱 및 최종 메시지 렌더링
         raw_content = final_message.content or ""
         if raw_content.strip():
-            # 스트리밍된 내용이 있으면 Render_* 파싱 후 표시
             await _render_streamed_message(final_message, raw_content)
 
-        # 4. 백그라운드 Job 감지 시 폴링 태스크 생성
-        for job_info in detected_jobs:
-            asyncio.create_task(
-                _poll_and_render_job(job_info["job_id"], job_info["agent"])
+        # 4. 세션에 활성 백그라운드 Job이 있으면 세션 모니터 시작
+        try:
+            session_jobs = await api_client.get_session_jobs(thread_id)
+            has_active = any(
+                j.get("status") in ("SUBMITTED", "RUNNING")
+                or (j.get("status") == "SUCCESS" and not j.get("supervisor_response"))
+                for j in session_jobs
             )
+            if has_active:
+                asyncio.create_task(_monitor_session_jobs(thread_id))
+        except Exception:
+            pass  # 서버 미연결 등 예외 시 무시
 
     except Exception as e:
         await cl.Message(content=f"❌ **에러가 발생했습니다:** {str(e)}").send()
