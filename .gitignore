@@ -55,6 +55,9 @@ artifacts/runs/
 artifacts/data/
 artifacts/screenshots/
 artifacts/temporary/
+artifacts/reports/
+artifacts/charts/
+artifacts/analyst_test/
 
 # ── Browser automation temp files ──
 bu_cdp_*/
