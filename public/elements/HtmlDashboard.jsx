@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 export default function HtmlDashboard(componentProps) {
   const [loading, setLoading] = useState(true);
@@ -18,9 +18,24 @@ export default function HtmlDashboard(componentProps) {
     ...((componentProps && componentProps.props) || {}),
   };
 
-  const url = p.url;
+  const htmlContent = p.html_content;
   const title = p.title || '데이터 분석 대시보드';
   const height = p.height || '80vh';
+
+  // HTML 문자열 → Blob URL 생성 (브라우저 메모리에서 직접 렌더링, 네트워크 요청 없음)
+  // localhost와 Codespaces 모두에서 동일하게 동작합니다.
+  const blobUrl = useMemo(() => {
+    if (!htmlContent) return null;
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    return URL.createObjectURL(blob);
+  }, [htmlContent]);
+
+  // 컴포넌트 언마운트 시 Blob URL 메모리 해제
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
 
   const containerStyle = {
     width: '100%',
@@ -117,10 +132,10 @@ export default function HtmlDashboard(componentProps) {
     zIndex: 1,
   };
 
-  if (!url) {
+  if (!blobUrl) {
     return (
       <div style={{ padding: '24px', color: '#ef4444', textAlign: 'center', background: '#fee2e2', borderRadius: '8px' }}>
-        ⚠️ 대시보드 URL이 제공되지 않았습니다. (Props: {JSON.stringify(p)})
+        ⚠️ 대시보드 HTML 콘텐츠가 제공되지 않았습니다. (Props: {JSON.stringify(Object.keys(p))})
       </div>
     );
   }
@@ -132,16 +147,14 @@ export default function HtmlDashboard(componentProps) {
           <span style={badgeStyle}>Interactive</span>
           <span>{title}</span>
         </div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
           style={btnStyle}
+          onClick={() => window.open(blobUrl, '_blank')}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)')}
         >
           새 탭에서 전체화면 열기 ↗
-        </a>
+        </button>
       </div>
       <div style={iframeContainerStyle}>
         {loading && (
@@ -150,7 +163,7 @@ export default function HtmlDashboard(componentProps) {
           </div>
         )}
         <iframe
-          src={url}
+          src={blobUrl}
           style={iframeStyle}
           title={title}
           onLoad={() => setLoading(false)}

@@ -252,19 +252,17 @@ async def _collect_hitl_decisions(interrupt_event: dict) -> List[dict]:
 async def on_reopen_dashboard(action: cl.Action):
     """사용자가 '대시보드 사이드 패널 열기' 버튼을 클릭하면 사이드 패널에 대시보드를 다시 띄웁니다."""
     payload = action.payload or {}
-    url = payload.get("url")
+    html_content = payload.get("html_content", "")
     title = payload.get("title", "데이터 분석 대시보드")
 
-    if url:
+    if html_content:
         element = cl.CustomElement(
             name="HtmlDashboard",
-            url=url,
-            mime="application/json",
-            props={"url": url, "title": title, "height": "80vh"},
+            props={"html_content": html_content, "title": title, "height": "80vh"},
             display="side",
         )
         await cl.Message(
-            content=f"📊 **[{title}]** 대시보드를 우측 사이드 패널에 다시 열었습니다.\n- [🌐 새 탭에서 전체화면으로 보기]({url})",
+            content=f"📊 **[{title}]** 대시보드를 우측 사이드 패널에 다시 열었습니다.",
             elements=[element],
             author="Agent Assistant"
         ).send()
@@ -326,35 +324,24 @@ async def on_message(message: cl.Message):
                 # 본문에서 깨지는 마크다운 엑박 태그 제거
                 clean_content = clean_content.replace(f"![{alt_text}]({raw_img})", "")
 
-        # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — CustomElement + iframe)
+        # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — Blob URL 방식)
+        # HTML 파일을 서버에서 직접 읽어 props로 전달 → React에서 Blob URL로 렌더링
+        # 이 방식은 localhost와 Codespaces 모두에서 네트워크 요청 없이 동작합니다.
         html_matches = re.findall(r"<Render_HTML>(.*?)</Render_HTML>", raw_content)
         for raw_html in html_matches:
             resolved_p = _resolve_existing_path(raw_html)
             if resolved_p:
                 fname = os.path.basename(resolved_p)
-                # artifacts/ 하위 파일이면 FastAPI static URL로 변환
-                # 예: artifacts/keyboard_analysis_dashboard.html → http://localhost:8000/artifacts/keyboard_analysis_dashboard.html
-                rel_path = raw_html.strip().strip("'\"")
-                if rel_path.startswith("artifacts/") or rel_path.startswith("artifacts\\"):
-                    dashboard_url = f"{FASTAPI_BASE_URL}/{rel_path.replace(os.sep, '/')}"
-                else:
-                    # artifacts 외부 파일은 절대 경로에서 artifacts 하위 경로 추출 시도
-                    try:
-                        abs_resolved = os.path.abspath(resolved_p)
-                        artifacts_root = os.path.abspath(os.path.join(project_root, "artifacts"))
-                        if abs_resolved.startswith(artifacts_root):
-                            rel_from_artifacts = os.path.relpath(abs_resolved, os.path.dirname(artifacts_root))
-                            dashboard_url = f"{FASTAPI_BASE_URL}/{rel_from_artifacts.replace(os.sep, '/')}"
-                        else:
-                            dashboard_url = f"{FASTAPI_BASE_URL}/artifacts/{fname}"
-                    except Exception:
-                        dashboard_url = f"{FASTAPI_BASE_URL}/artifacts/{fname}"
+                # HTML 파일 내용을 직접 읽어 props로 전달 (Blob URL 렌더링용)
+                try:
+                    with open(resolved_p, "r", encoding="utf-8") as f:
+                        html_content = f.read()
+                except Exception as e:
+                    html_content = f"<html><body><h2>⚠️ 대시보드 파일 읽기 실패</h2><p>{e}</p></body></html>"
 
                 elements.append(cl.CustomElement(
                     name="HtmlDashboard",
-                    url=dashboard_url,
-                    mime="application/json",
-                    props={"url": dashboard_url, "title": fname, "height": "80vh"},
+                    props={"html_content": html_content, "title": fname, "height": "80vh"},
                     display="side",
                 ))
 
@@ -362,12 +349,12 @@ async def on_message(message: cl.Message):
                 actions.append(cl.Action(
                     name="reopen_dashboard",
                     label=f"📊 {fname} 사이드 패널 열기",
-                    payload={"url": dashboard_url, "title": fname}
+                    payload={"html_content": html_content, "title": fname}
                 ))
 
                 clean_content = clean_content.replace(
                     f"<Render_HTML>{raw_html}</Render_HTML>",
-                    f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> - [새 탭에서 전체화면으로 열기 ↗]({dashboard_url})\n> *(우측 사이드 패널이 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
+                    f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(우측 사이드 패널에 표시됩니다. 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
                 )
             else:
                 clean_content = clean_content.replace(f"<Render_HTML>{raw_html}</Render_HTML>", "")
