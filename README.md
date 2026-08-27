@@ -125,7 +125,7 @@ missions/
 AAWS/
 ├── notebooks/              # 📗 핸즈온 실습 노트북 (1~4)
 ├── missions/               # 🎯 실습 미션 가이드 (01~04)
-├── lessons_sumary/         # 📚 실전 에이전트 아키텍처 & 설계 패턴 교훈 바이블
+├── lessons_summary/        # 📚 실전 에이전트 아키텍처 & 설계 패턴 교훈 바이블
 │   ├── Subagent.md                     # Dynamic Context Pruning, Blackboard 패턴, Sub-Agent Protocol
 │   ├── Long_running_agent.md           # Event-Driven Reactive Wakeup & 비동기 롱러닝 아키텍처
 │   └── Agent_Engineering_Principles.md # 도구 설계(Curated View), Prompt-as-Code, EDD 평가 하네스
