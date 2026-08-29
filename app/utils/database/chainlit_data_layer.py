@@ -190,20 +190,26 @@ class ChainlitSQLiteDataLayer(BaseDataLayer):
     # ── 요소(Element: 이미지/파일 등) ─────────────────────────
 
     async def create_element(self, element: Element):
-        """Element(이미지, 파일 등)를 저장합니다."""
+        """Element(이미지, 파일, CustomElement 등)를 저장합니다."""
+        props_val = getattr(element, "props", None)
+        props_str = json.dumps(props_val) if props_val is not None else None
+        mime_val = getattr(element, "mime", None) or "application/octet-stream"
+
         async with self._connect() as db:
             await db.execute(
                 """INSERT INTO elements (id, threadId, type, chainlitKey, url, objectKey,
-                                         name, display, size, language, mime, forId)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(id) DO UPDATE SET url=excluded.url, display=excluded.display""",
+                                         name, display, size, language, mime, forId, props)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET 
+                       url=excluded.url, display=excluded.display, props=excluded.props, mime=excluded.mime""",
                 (
                     element.id, element.thread_id, element.type,
                     getattr(element, "chainlit_key", None),
                     element.url, getattr(element, "object_key", None),
                     element.name, element.display,
                     getattr(element, "size", None), getattr(element, "language", None),
-                    getattr(element, "mime", None), getattr(element, "for_id", None),
+                    mime_val, getattr(element, "for_id", None),
+                    props_str,
                 ),
             )
             await db.commit()
@@ -218,10 +224,12 @@ class ChainlitSQLiteDataLayer(BaseDataLayer):
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
+                    props_dict = json.loads(row["props"]) if row["props"] else None
                     return ElementDict(
                         id=row["id"], threadId=row["threadId"], type=row["type"],
                         name=row["name"], url=row["url"], display=row["display"],
-                        forId=row["forId"],
+                        forId=row["forId"], mime=row["mime"] or "application/octet-stream",
+                        props=props_dict,
                     )
         return None
 
@@ -423,11 +431,14 @@ class ChainlitSQLiteDataLayer(BaseDataLayer):
         # Element 데이터 변환
         elements: List[ElementDict] = []
         for e in e_rows:
+            props_dict = json.loads(e["props"]) if ("props" in e.keys() and e["props"]) else None
+            mime_str = e["mime"] if ("mime" in e.keys() and e["mime"]) else "application/octet-stream"
             elements.append(
                 ElementDict(
                     id=e["id"], threadId=e["threadId"], type=e["type"],
                     name=e["name"], url=e["url"], display=e["display"],
-                    forId=e["forId"],
+                    forId=e["forId"], mime=mime_str,
+                    props=props_dict,
                 )
             )
 

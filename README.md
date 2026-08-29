@@ -125,13 +125,19 @@ missions/
 AAWS/
 ├── notebooks/              # 📗 핸즈온 실습 노트북 (1~4)
 ├── missions/               # 🎯 실습 미션 가이드 (01~04)
+├── lessons_summary/        # 📚 실전 에이전트 아키텍처 & 설계 패턴 교훈 바이블
+│   ├── Subagent.md                     # Dynamic Context Pruning, Blackboard 패턴, Sub-Agent Protocol
+│   ├── Long_running_agent.md           # Event-Driven Reactive Wakeup & 비동기 롱러닝 아키텍처
+│   └── Agent_Engineering_Principles.md # 도구 설계(Curated View), Prompt-as-Code, EDD 평가 하네스
 ├── app/                    # 🧠 에이전트 시스템 코어 패키지
-│   ├── agents/             #   ├── 에이전트 팩토리 (chatbot, scraper, supervisor)
+│   ├── agents/             #   ├── 에이전트 팩토리 (chatbot, scraper, supervisor, analyst)
 │   ├── tools/              #   ├── 에이전트 도구 모음
 │   │   ├── common.py       #   │   ├── 범용 코딩/파일/검색 도구 10종
 │   │   ├── navigator.py    #   │   ├── Playwright 웹 탐색 도구 6종 + PlaywrightManager
-│   │   └── plan.py         #   │   └── Supervisor 계획 도구 5종
-│   ├── prompts/            #   ├── 에이전트별 시스템 프롬프트
+│   │   ├── plan.py         #   │   ├── Supervisor 계획 도구 5종
+│   │   ├── supervisor_tools.py #   │├── 서브에이전트 오케스트레이션 도구
+│   │   └── analyst.py      #   │   └── 데이터 분석 도구 6종
+│   ├── prompts/            #   ├── 에이전트별 시스템 프롬프트 (CHATBOT, SCRAPER, SUPERVISOR, ANALYST)
 │   ├── database/           #   ├── 사용자 기억(USER.md), 대화 DB
 │   ├── middleware/         #   ├── HITL 미들웨어
 │   ├── utils/              #   ├── LLM 초기화, 메시지 유틸, DB 레이어
@@ -139,6 +145,8 @@ AAWS/
 │   ├── chainlit_ui.py      #   ├── Chainlit 채팅 프론트엔드
 │   ├── streamlit_ui.py     #   ├── Streamlit 채팅 프론트엔드
 │   └── client.py           #   └── 터미널 테스트 CLI 클라이언트
+├── public/                 # 🎨 프론트엔드 커스텀 UI 에셋 (HtmlDashboard.jsx)
+├── skills/                 # 📚 에이전트 스킬 정의
 ├── evaluate/               # 🧪 시나리오 자동 평가 프레임워크
 │   ├── run_scraper_scenarios.py  #   ├── 평가 러너 (전체 시나리오 순차 실행)
 │   ├── evaluator.py              #   ├── LLM-as-a-Judge 채점 엔진
@@ -150,7 +158,6 @@ AAWS/
 │   ├── data/               #   ├── 에이전트가 수집한 데이터 (gitignored)
 │   └── code/, notebooks/   #   └── 노트북 실습용 샘플 데이터
 ├── configs/                # ⚙️ HITL, 로깅 등 런타임 설정
-├── skills/                 # 📚 에이전트 스킬 정의
 ├── install/                # 🔧 환경 설치 스크립트 모음
 ├── start_vnc.sh            # 🖥️ VNC + noVNC 구동 스크립트
 └── README.md               # 📖 프로젝트 메인 명세서

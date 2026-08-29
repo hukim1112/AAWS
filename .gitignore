@@ -17,6 +17,8 @@ env/
 # ── Databases & Caching ──
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite3
 
 # ── Logs ──
@@ -25,6 +27,7 @@ env/
 # ── Task tracking & State ──
 task.md
 task_state.json
+plan_state.json
 TASK.md
 
 # ── Jupyter Notebook ──
@@ -52,6 +55,9 @@ artifacts/runs/
 artifacts/data/
 artifacts/screenshots/
 artifacts/temporary/
+artifacts/reports/
+artifacts/charts/
+artifacts/analyst_test/
 
 # ── Browser automation temp files ──
 bu_cdp_*/
