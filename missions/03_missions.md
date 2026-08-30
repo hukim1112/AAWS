@@ -205,7 +205,7 @@ python app/server.py --port 8000
 
 #### 🌐 터미널 2 (Chainlit UI 가동):
 ```bash
-chainlit run app/chainlit_ui.py -w --port 8080
+chainlit run app/chainlit_ui.py --port 8080
 ```
 
 ---

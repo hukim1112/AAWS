@@ -120,7 +120,7 @@ python app/server.py --port 8000
 
 #### 🌐 터미널 2 (Chainlit 웹 채팅 UI 가동):
 ```bash
-chainlit run app/chainlit_ui.py -w --port 8080
+chainlit run app/chainlit_ui.py --port 8080
 ```
 *(성공 메시지: `Your app is available at http://localhost:8080`)*
 

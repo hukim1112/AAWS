@@ -178,7 +178,7 @@ python app/server.py --port 8000
 
 ### 2. Chainlit 채팅 UI 가동 — 터미널 ②
 ```bash
-chainlit run app/chainlit_ui.py -w --port 8080
+chainlit run app/chainlit_ui.py --port 8080
 ```
 * 웹 브라우저에서 `http://localhost:8080`에 접속하여 에이전트를 선택하고 대화합니다.
 * 로그인: `user` / `1234`
