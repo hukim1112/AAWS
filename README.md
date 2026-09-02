@@ -36,31 +36,36 @@
 
 ## 🚀 시작하기 (환경 세팅)
 
-Codespaces 또는 로컬 WSL2(우분투) 환경을 처음 열었다면, 터미널에서 다음 명령어를 실행하여 필요한 모든 패키지 및 브라우저 환경을 한 번에 설치하세요.
+### 1. GitHub Codespaces 환경 (사전 빌드 Docker 컨테이너)
+
+GitHub Codespaces 환경에서는 사전 빌드된 Docker 이미지(`agent_lab`)를 기반으로 컨테이너가 구동되므로, **별도의 패키지 및 브라우저 의존성 설치 과정이 필요하지 않습니다.**
+
+1. 리포지토리 상단의 **[Code] ➔ [Codespaces] ➔ [Create codespace]**를 통해 실습 환경을 생성합니다.
+2. 컨테이너 기동 시 프로젝트 루트에 `.env` 파일이 자동 생성되며, 필요한 인증 시크릿이 함께 구성됩니다.
+3. 생성된 `.env` 파일을 열고 사용할 API 키를 입력합니다:
+   ```env
+   GOOGLE_API_KEY="your-google-api-key"
+   OPENAI_API_KEY="your-openai-api-key"
+   DISPLAY=":1"          # noVNC 가상 디스플레이 포트
+   HEADLESS="true"       # true: 백그라운드 실행 / false: VNC 데스크톱 화면에서 브라우저 시청
+   ```
+
+### 2. 로컬 환경 (WSL2 / Linux 수동 설치)
+
+도커 컨테이너를 사용하지 않고 로컬 우분투 또는 WSL2 환경에서 직접 프로젝트를 구동하는 경우에는 아래 스크립트를 실행하여 시스템 패키지 및 Python 라이브러리를 설치해야 합니다:
 
 ```bash
-# install 폴더로 이동하여 전체 설치 스크립트 실행
 cd install
 bash install_all.sh
 ```
 
-설치가 완료되면 Python 패키지, Playwright Chromium 브라우저, 가상 디스플레이(noVNC), 한글 폰트 설정이 모두 자동으로 마무리됩니다.
+스크립트 실행 시 시스템 패키지(Xvfb, noVNC, 한글 폰트 등), Python 라이브러리, Playwright Chromium 브라우저가 순차적으로 설치되며 `.env` 파일이 생성됩니다.
 
-### 환경 변수 설정
+---
 
-프로젝트 루트에 `.env` 파일을 생성하고 아래 키를 설정하세요. (`.env.example`을 복사해 사용하실 수 있습니다.)
+### 🔍 LangSmith 트레이싱 설정 (선택 사항)
 
-```env
-GOOGLE_API_KEY="your-google-api-key"
-OPENAI_API_KEY="your-openai-api-key"
-DISPLAY=":1"          # 가상 디스플레이(noVNC)에서 GUI 브라우저를 실시간 시청하기 위한 필수 설정
-HEADLESS="true"       # true: headless 모드 / false: headed 모드 (VNC로 시각 확인 시 false)
-```
-
-### 🔍 LangSmith 트레이싱 설정 (선택적용)
-
-**[LangSmith](https://smith.langchain.com)** 는 LangChain/LangGraph 에이전트의 실행 흐름을 시각적으로 추적하고 디버깅할 수 있는 공식 모니터링 플랫폼입니다.
-사용을 위해 발급 받은 api key를 .env에 기입하고, LANGCHAIN_TRACING_V2=true 로 세팅합니다.
+**[LangSmith](https://smith.langchain.com)** 는 LangChain/LangGraph 에이전트의 실행 흐름을 시각적으로 추적하고 디버깅할 수 있는 모니터링 플랫폼입니다. 사용을 원하시는 경우 발급받은 API 키를 `.env`에 기입하고 트레이싱을 활성화합니다.
 
 ```env
 LANGCHAIN_API_KEY="your-langsmith-key"
@@ -72,15 +77,25 @@ LANGCHAIN_PROJECT=AAWS
 
 ## 🖥️ VNC 서버 실행 (브라우저 시각화)
 
-에이전트가 실제 크롬 브라우저를 띄워 마우스를 조작하고 클릭하는 과정을 실시간 화면으로 확인하려면 VNC 서버를 가동하세요.
+에이전트가 실제 크롬 브라우저를 띄워 웹 페이지를 탐색하고 상호작용하는 과정을 실시간 화면으로 확인하려면 VNC 서버를 실행합니다.
 
+### 1. VNC 서버 실행
+터미널에서 아래 스크립트를 실행합니다:
 ```bash
 ./start_vnc.sh
 ```
 
-1. Codespaces의 **포트(Ports)** 탭에서 **`6080` 포트**의 지구본 아이콘(Open in browser)을 클릭합니다.
-2. 열린 페이지 목록에서 **`vnc.html`** 을 선택합니다.
-3. 파란색 noVNC 화면에서 **`Connect`** 버튼을 누르면 가상 데스크톱 화면이 나타나며, 에이전트가 움직이는 브라우저 창을 실시간으로 시청할 수 있습니다.
+### 2. noVNC 화면 접속
+1. Codespaces 하단 **포트(Ports)** 탭에서 **`6080` 포트**의 지구본 아이콘(Open in browser)을 클릭합니다.
+2. 새 창에서 noVNC 웹 뷰어가 열리면 **`Connect`** 버튼을 클릭하여 가상 데스크톱 화면에 접속합니다.
+   *(외부 접속 권한 문제가 발생할 경우, 포트 탭에서 6080 포트를 우클릭하여 `Port Visibility -> Public`으로 변경합니다.)*
+
+### 3. 브라우저 구동 간이 검증
+새 터미널을 열고 아래 테스트 스크립트를 실행하여 가상 화면에 브라우저가 정상적으로 기동되는지 확인합니다:
+```bash
+python test_browser_vnc.py
+```
+> 💡 **참고**: VNC 가상 화면으로 브라우저 조작 과정을 실시간 시청하려면 `.env` 파일에서 `HEADLESS="false"`로 설정되어 있어야 합니다.
 
 ---
 
