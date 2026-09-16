@@ -19,10 +19,11 @@
    - Dynamic Context Pruning (부모의 대화 기록 대신 task_instruction 및 target_file_list만 전달)
    - scraper.ainvoke() 실행 후 결과 문자열 반환
 
-3. SUPERVISOR_SYSTEM_PROMPT (시스템 프롬프트 정의)
-   - Planning First (enter_plan, task_create로 계획 수립)
-   - Delegation via invoke_sub_agent (Scraper에게 데이터 수집 위임)
-   - Verification & Consolidation (결과 확인 후 exit_plan 호출 및 최종 종합)
+3. SUPERVISOR_SYSTEM_PROMPT (원칙 중심 시스템 프롬프트 정의)
+   - 작업 규모에 맞게 처리하기 (복잡한 작업은 계획 수립 및 전문가에게 계획 공유)
+   - 전문가 활용하기 (도구 설명서에 위임하여 자율 위임 유도)
+   - 실패해도 멈추지 않기 (Backtracking 자가 치유)
+   - 결과 중심 답변 (산출물 저장 및 간결한 요약 보고)
 
 4. create_agent_executor (에이전트 팩토리 함수)
    - LLM 초기화 (init_chat_model)
@@ -57,7 +58,7 @@ from app.agents.scraper import create_agent_executor as create_scraper_executor
 
 AGENT_METADATA = {
     "name": "supervisor",
-    "description": "전체 기획/계획 수립 및 전문 하위 에이전트(Scraper 등)를 오케스트레이션하는 총괄 Supervisor"
+    "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트"
 }
 
 # =============================================================================
