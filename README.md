@@ -47,9 +47,12 @@ GitHub Codespaces 환경에서는 사전 빌드된 Docker 이미지(`agent_lab`)
    ```env
    GOOGLE_API_KEY="your-google-api-key"
    OPENAI_API_KEY="your-openai-api-key"
+   TAVILY_API_KEY="your-tavily-api-key"
    DISPLAY=":1"          # noVNC 가상 디스플레이 포트
    HEADLESS="true"       # true: 백그라운드 실행 / false: VNC 데스크톱 화면에서 브라우저 시청
    ```
+   > 💡 **Tavily API 키 발급 안내**:  
+   > 에이전트의 실시간 웹 검색(`web_search`) 기능을 사용하려면 **[tavily.com](https://tavily.com)** 에 접속하여 회원가입 후 무료 API 키를 발급받아 `TAVILY_API_KEY`에 입력하세요.
 
 ### 2. 로컬 환경 (WSL2 / Linux 수동 설치)
 
