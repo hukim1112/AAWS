@@ -1,12 +1,13 @@
 """
 ===============================================================================
-[AAWS Mission 03] Supervisor — 멀티에이전트 총괄 오케스트레이터 (교육생 실습용)
+[AAWS Mission 03 & 04] Supervisor — 멀티에이전트 총괄 오케스트레이터 (교육생 실습용)
 ===============================================================================
-본 파일은 Mission 03 실습 파일입니다.
+본 파일은 Mission 03 및 Mission 04 실습 대상 파일입니다.
 `notebooks/4_MultiAgent_Orchestration.ipynb` 및 `missions/03_missions.md`를 참고하여
 하위 전문 에이전트(Scraper 등)를 오케스트레이션하는 Supervisor 에이전트를 완성하세요.
 
 [실습 단계 가이드]
+── [Mission 03: In-Process 인프로세스 오케스트레이터 구축] ──
 1. InvokeSubAgentInput (Pydantic 스키마 정의)
    - task_instruction: str (하위 에이전트에게 내릴 명확한 지시문)
    - target_file_list: List[str] (참조하거나 생성할 파일 경로 목록)
@@ -28,6 +29,11 @@
    - AsyncSqliteSaver 체크포인터 설정
    - 도구 바인딩 (계획 도구 5종 + invoke_sub_agent + 공용 파일 도구)
    - create_agent()로 supervisor_agent 생성 및 반환
+
+── [Mission 04: Long-Running 비동기 아키텍처 업그레이드] ──
+5. 프로덕션 도구 교체 (missions/04_missions.md):
+   - 로컬 인프로세스 함수 대신 제공된 `app.tools.supervisor_tools` 모듈을 임포트하여
+     도구 목록에 교체 바인딩하면, 비동기 백그라운드 Job 및 리액티브 웨이크업이 즉시 활성화됩니다!
 ===============================================================================
 """
 
@@ -55,7 +61,7 @@ AGENT_METADATA = {
 }
 
 # =============================================================================
-# 1. invoke_sub_agent Pydantic 스키마 및 도구 정의
+# 1. invoke_sub_agent Pydantic 스키마 및 도구 정의 (Mission 03)
 # =============================================================================
 # TODO: missions/03_missions.md [2단계]를 참고하여
 #       InvokeSubAgentInput 스키마와 invoke_sub_agent 도구를 구현하세요.

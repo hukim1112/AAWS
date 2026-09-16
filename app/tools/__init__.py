@@ -12,6 +12,7 @@ from .plan import (
     enter_plan, exit_plan, task_create, task_list, task_update,
     tools_planning, PLANNING_AND_TASK_TOOLS
 )
+from .supervisor_tools import invoke_sub_agent, list_sub_agents, get_sub_agent_job_status
 
 # 🏭 챗봇용 범용 도구 대통합 바인딩 (Tool Factory Groups)
 tools_chatbot = [
@@ -33,11 +34,14 @@ tools_scraper = [
     bash_command, web_search, web_fetch,
 ]
 
-# 👑 Supervisor용 계획 및 공용 파일 도구 바인딩 (Mission 03 실습 베이스 도구)
+# 👑 Supervisor용 계획 및 프로덕션 오케스트레이션 도구 바인딩 (Mission 04 프로덕션 도구)
 tools_supervisor = [
+    # Planning & Task Board
     enter_plan, exit_plan, task_create, task_list, task_update,
-    file_read, file_writer, file_edit, grep_search, glob_search,
-    bash_command, web_search
+    # Sub-Agent Orchestration (Long-Running & Reactive Wakeup)
+    list_sub_agents, invoke_sub_agent, get_sub_agent_job_status,
+    # Common File / Search
+    file_read, file_writer, file_edit, grep_search, glob_search, web_search,
 ]
 
 __all__ = [
@@ -50,4 +54,5 @@ __all__ = [
     "verify_selectors", "interact_page", "take_screenshot",
     "browse_web",
     "enter_plan", "exit_plan", "task_create", "task_list", "task_update",
+    "list_sub_agents", "invoke_sub_agent", "get_sub_agent_job_status",
 ]

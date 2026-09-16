@@ -1,180 +1,160 @@
-# 🎯 Mission 04: 나만의 커스텀 서브 에이전트(Custom Sub-Agent) 기획·개발 및 Supervisor 연동
+# 🎯 Mission 04: Long-Running Agent 아키텍처 연동 및 리액티브 웨이크업(Reactive Wakeup) 테스트
 
-본 미션은 지금까지 배운 에이전트 설계 기법(ReAct, Tool 바인딩, System Prompt, Context Isolation)을 종합하여, **여러분만의 창의적인 전문 서브 에이전트(Custom Sub-Agent)를 직접 기획·구현하고 `supervisor`에 연결하여 2단계 이상의 자율 협업 파이프라인을 완성**하는 최종 캡스톤 실습 과제입니다.
+본 미션은 `Mission 03`에서 구축한 동기식 인프로세스(In-Process) 멀티에이전트 구조의 한계를 극복하고, **실제 프로덕션 엔터프라이즈 환경에서 수 분 이상 소요되는 대규모 작업(웹 크롤링, 심층 리서치 등)을 안정적으로 처리하기 위해 비동기 작업 큐(Job Queue)와 이벤트 기반 리액티브 웨이크업(Event-Driven Reactive Wakeup) 아키텍처를 연동**하는 실습 과제입니다.
 
-Supervisor 아래에 어떤 전문 영역의 에이전트를 둘 것인지는 **여러분의 자유로운 선택**에 달려 있습니다!
+복잡한 백엔드 코드를 작성할 필요 없이, **제공된 프로덕션 도구 모듈(`app/tools/supervisor_tools.py`)을 Supervisor에 장착(도구 교체)하는 것만으로** 시스템 아키텍처를 즉시 업그레이드할 수 있습니다!
+
+---
+
+## 💡 왜 Long-Running 아키텍처가 필요한가? (In-Process vs Long-Running)
+
+| 비교 항목 | Mission 03 (In-Process 방식) | Mission 04 (Long-Running 비동기 아키텍처) |
+|:---|:---|:---|
+| **실행 방식** | 단일 프로세스 루프 안에서 하위 에이전트 동기 호출 (`ainvoke`) | FastAPI 백그라운드 작업 큐(`POST /jobs`)에 등록 후 `job_id` 즉시 반환 |
+| **타임아웃 문제** | 2~5분 이상 긴 작업 시 **HTTP 연결 끊김 및 브라우저 타임아웃** 발생 | **타임아웃 없음** (즉시 응답 반환 후 서버 백그라운드에서 실행) |
+| **사용자 경험 (UX)** | 하위 작업이 끝날 때까지 **채팅창 전체가 멈춤(Freezing)** | 즉시 작업 접수 확인 메시지 수신, UI 멈춤 없이 대기 |
+| **결과 수신 방식** | 동기 대기 후 반환 | 작업 완료 즉시 시스템이 부모를 깨우는 **Reactive Wakeup**으로 자동 보고 |
 
 ---
 
 ## 📂 실습 대상 및 핵심 파일
-* **신규 서브 에이전트 파일**: `app/agents/[자신만의_에이전트명].py` (직접 구현)
-* **총괄 오케스트레이터 파일**: `app/agents/supervisor.py` (하위 에이전트 분기 연결)
-* **활용 도구 모음**: `app/tools/common.py` 및 커스텀 도구
-* **산출물 보관소**: `artifacts/` (리포트, 정제 데이터, 콘텐츠 등)
+* **제공된 프로덕션 도구 모듈**: `app/tools/supervisor_tools.py` (이미 구현 완비)
+* **도구 교체 대상 파일**: `app/agents/supervisor.py` (임포트 및 도구 리스트 교체)
+* **백엔드 서버 엔진**: `app/server.py` (`/agents/{role}/jobs` 및 리액티브 워커)
+* **프론트엔드 실시간 모니터**: `app/chainlit_ui.py` (작업 폴링 및 실시간 렌더링)
+* **참고 이론 문서**: `lessons_summary/Long_running_agent.md`
 
 ---
 
 ## 📋 미션 목표
-1. **[도메인 선택 및 기획]**: 해결하고 싶은 문제에 맞는 서브 에이전트의 역할(Persona), 도구(Tools), 기대 산출물을 정의합니다.
-2. **[서브 에이전트 모듈 구현]**: `app/agents/` 디렉토리에 독립된 에이전트 모듈을 작성합니다.
-3. **[Supervisor 위임 분기 연동]**: `app/agents/supervisor.py`의 `invoke_sub_agent` 도구에 신규 에이전트 분기 로직을 연결합니다.
-4. **[End-to-End 멀티에이전트 통합 검증]**: Chat UI에서 Supervisor에게 복합 지시를 내려 **`Supervisor ➔ Scraper(수집) ➔ Custom Sub-Agent(가공/분석/창작)`**의 전체 파이프라인이 매끄럽게 동작하는지 확인합니다.
-
----
-
-## 💡 서브 에이전트 트랙 선택 가이드 (자유 선택)
-
-여러분의 관심사나 실무 도메인에 맞는 트랙을 하나 선택하거나, 완전히 새로운 아이디어를 구현해 보세요:
-
-| 트랙 옵션 | 에이전트 페르소나 | 주요 임무 및 핵심 기능 | 최종 산출물 (Artifacts) |
-|:---|:---|:---|:---|
-| **트랙 A (분석 & 시각화)** | 📊 **Data Analyst** | 수집 데이터 통계 집계(Pandas), 차트 이미지(.png) 생성, 인사이트 분석 | `artifacts/reports/*.png`, `*_report.md` |
-| **트랙 B (콘텐츠 창작)** | ✍️ **Content Creator** | 수집된 데이터를 가공하여 블로그 포스팅, 카드뉴스 카피, 마케팅 슬로건 제작 | `artifacts/reports/marketing_post.md` |
-| **트랙 C (데이터 품질 QA)** | 🔍 **Data Validator** | 수집된 데이터의 스키마 일치도, 결측치, 중복값 정제 및 데이터 품질 리포트 발행 | `artifacts/data/cleaned_data.json` |
-| **트랙 D (요약 & 브리핑)** | 📑 **Executive Briefer** | 방대한 데이터를 바쁜 의사결정자를 위한 1페이지 핵심 불릿 브리핑 문서로 요약 | `artifacts/reports/executive_summary.md` |
-| **트랙 E (자유 트랙)** | 🎨 **Custom Specialist** | 번역/로컬라이저, 법률/규정 검토기, 이메일 드래프터 등 자유 기획 | 자유 형식의 산출물 |
+1. **[프로덕션 도구 확인]**: `app/tools/supervisor_tools.py`에 구현된 3대 오케스트레이션 도구(`list_sub_agents`, `invoke_sub_agent`, `get_sub_agent_job_status`)의 역할을 확인합니다.
+2. **[Supervisor 도구 교체]**: `app/agents/supervisor.py`에서 기존 로컬 인프로세스 함수 대신 `app/tools/supervisor_tools.py`의 도구들을 임포트하여 바인딩합니다.
+3. **[서버 & Chat UI 가동]**: FastAPI 백엔드와 Chainlit 프론트엔드를 실행합니다.
+4. **[비동기 실행 & 리액티브 웨이크업 검증]**:
+   - Chat UI에서 Supervisor에게 웹 스크래핑을 지시합니다.
+   - Supervisor가 작업을 백그라운드에 등록하고 `[JOB SUBMITTED: job_xxx]` 메시지를 즉시 반환하는 것을 확인합니다.
+   - 백그라운드에서 Scraper가 작업을 완수한 즉시, 사용자의 추가 질문 없이도 **Supervisor가 자동으로 깨어나(Reactive Wakeup) 최종 보고서를 화면에 출력하는 전 과정**을 검증합니다.
 
 ---
 
 ## 🛠️ 단계별 수행 가이드
 
-### 1단계: 서브 에이전트 모듈 구현 (`app/agents/[에이전트명].py`)
+### 1단계: `app/tools/supervisor_tools.py` 3대 도구 살펴보기
 
-`app/agents/` 디렉토리에 원하는 이름의 파일(예: `analyst.py`, `creator.py`, `validator.py` 등)을 생성하고, 아래의 기본 뼈대를 바탕으로 도구와 시스템 프롬프트를 구성합니다:
+이미 완성형으로 제공된 `app/tools/supervisor_tools.py` 파일을 열고 다음 핵심 도구들의 역할을 확인하세요:
+
+1. **`list_sub_agents`**: 현재 서버에 등록된 호출 가능한 서브에이전트 목록 조회 (`GET /agents`)
+2. **`invoke_sub_agent`**: 하위 에이전트에게 작업을 비동기로 위임하고 `[JOB SUBMITTED: job_xxx]`를 즉시 반환
+3. **`get_sub_agent_job_status`**: 진행 중인 특정 작업의 완료 여부 및 결과 보고서 조회 (`GET /jobs/{job_id}`)
+
+---
+
+### 2단계: `app/agents/supervisor.py`에서 도구 교체하기 (단 2줄 수정!)
+
+`app/agents/supervisor.py` 파일을 열고, 기존의 인프로세스 도구 대신 `supervisor_tools.py`의 프로덕션 도구를 장착합니다:
 
 ```python
-# app/agents/custom_worker.py (예시 뼈대)
+# app/agents/supervisor.py
 
-import os
-import json
-import asyncio
-from langchain.agents import create_agent
-from app.utils import init_chat_model
-from app.tools.common import file_read, file_writer, bash_command, glob_search
-from app.utils.context import AgentContext
+# ── 1. 기존 인프로세스 도구 대신 supervisor_tools 임포트 ──
+from app.tools.supervisor_tools import (
+    invoke_sub_agent,
+    list_sub_agents,
+    get_sub_agent_job_status
+)
+# 또는 tools_supervisor를 통째로 임포트할 수도 있습니다:
+# from app.tools import tools_supervisor
 
-AGENT_METADATA = {
-    "name": "custom_worker",  # 여러분의 에이전트 이름
-    "description": "특정 전문 작업을 수행하는 서브 에이전트"
-}
+# ... (기존 설정 유지)
 
-# 1. 서브 에이전트 전용 시스템 프롬프트 정의
-WORKER_SYSTEM_PROMPT = """
-당신은 [전문 역할명] 에이전트입니다.
-당신의 임무는 전달받은 대상 파일(`target_file_list`)의 데이터를 가공/분석하여 요구된 산출물을 생성하는 것입니다.
-
-[행동 수칙]
-1. `file_read` 등으로 입력 데이터를 확인하세요.
-2. 필요한 도구(`bash_command`, `file_writer` 등)를 활용하여 작업을 수행하고 결과 산출물을 `artifacts/` 폴더에 파일로 저장하세요.
-3. 작업 완료 후 Supervisor에게는 다음 5줄 요약 포맷으로만 간결히 보고하세요:
-   [TASK REPORT]
-   - Status: SUCCESS | FAILED | BLOCKER
-   - Target Files: (대상 파일 경로)
-   - Artifacts Created: (생성한 산출물 파일 경로)
-   - Summary: (핵심 결과 요약 1~2줄)
-   - Issues: None
-"""
-
-# 2. 에이전트 팩토리 함수
 async def create_agent_executor():
-    llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+    # ...
     
-    # 에이전트에게 필요한 도구 목록 선택
-    tools = [file_read, file_writer, bash_command, glob_search]
+    # ── 2. 에이전트 도구 목록 교체 ──
+    tools = [
+        enter_plan, exit_plan, task_create, task_list, task_update,
+        # 프로덕션 3대 오케스트레이션 도구 장착:
+        invoke_sub_agent, list_sub_agents, get_sub_agent_job_status,
+        file_read, file_writer, glob_search, grep_search
+    ]
     
-    agent = create_agent(
+    supervisor_agent = create_agent(
         model=llm,
         tools=tools,
-        system_prompt=WORKER_SYSTEM_PROMPT,
+        system_prompt=SUPERVISOR_SYSTEM_PROMPT,
+        checkpointer=checkpointer,
         context_schema=AgentContext
     )
-    return agent
+    return supervisor_agent
 ```
 
 ---
 
-### 2단계: `app/agents/supervisor.py`에 서브 에이전트 분기 연결
+### 3단계: 서버 및 Chainlit UI 가동
 
-[`app/agents/supervisor.py`](file:///c:/Users/hyoun/Desktop/working_project/basic_agent/app/agents/supervisor.py) 파일을 열고, `invoke_sub_agent` 함수에 새로 만든 서브 에이전트를 호출할 수 있도록 분기 로직을 추가합니다:
-
-```python
-# app/agents/supervisor.py 수정 예시
-
-from app.agents.scraper import create_agent_executor as create_scraper_executor
-from app.agents.custom_worker import create_agent_executor as create_custom_worker_executor  # 👈 추가!
-
-@tool(args_schema=InvokeSubAgentInput)
-async def invoke_sub_agent(task_instruction: str, target_file_list: List[str] = [], subagent_role: str = "scraper") -> str:
-    """하위 전문 에이전트를 동적으로 분기 실행합니다."""
-    
-    file_list_str = ", ".join(target_file_list) if target_file_list else "지정 파일 없음"
-    role_normalized = subagent_role.lower()
-    
-    # 💡 역할(Role) 키워드에 따른 동적 에이전트 라우팅
-    if "custom" in role_normalized or "analyst" in role_normalized or "creator" in role_normalized:
-        worker = await create_custom_worker_executor()
-        worker_type = subagent_role
-    else:
-        worker = await create_scraper_executor()
-        worker_type = "Scraper"
-        
-    prompt = f"""Target File List: {file_list_str}
-Instruction: {task_instruction}
-
-[수행 지침]
-1. 역할을 성실히 수행하고, 결과 산출물을 디스크(artifacts/)에 저장하세요.
-2. 작업 완료 후 반드시 [TASK REPORT] 규격(Status, Target Files, Artifacts Created, Summary, Issues)으로 보고하세요.
-"""
-
-    config = {"configurable": {"thread_id": f"{worker_type.lower()}_{int(asyncio.get_event_loop().time() * 1000)}"}}
-    response = await worker.ainvoke(
-        {"messages": [HumanMessage(content=prompt)]},
-        config=config
-    )
-    
-    return normalize_content(response["messages"][-1].content)
-```
-
----
-
-### 3단계: 서버 및 Chat UI 가동
+터미널 2개에서 백엔드와 프론트엔드를 실행합니다:
 
 ```bash
-# 터미널 1 (FastAPI 서버 가동)
+# 터미널 1: FastAPI 백엔드 서버 가동
 python app/server.py --port 8000
 
-# 터미널 2 (Chainlit UI 가동)
+# 터미널 2: Chainlit 웹 채팅 UI 가동
 chainlit run app/chainlit_ui.py --port 8080
 ```
 
 ---
 
-### 4단계: Chat UI에서 복합 파이프라인 통합 테스트
+### 4단계: 비동기 작업 및 리액티브 웨이크업(Reactive Wakeup) 테스트
 
-1. 웹 브라우저(`http://localhost:8080`)에 접속하여 **`supervisor`** 에이전트를 선택합니다.
-2. 채팅창에 **수집과 여러분의 서브 에이전트 작업이 결합된 복합 미션**을 요청합니다.
+1. 웹 브라우저(`http://localhost:8080`)에 접속하여 `supervisor` 프로필을 선택합니다.
+2. 채팅창에 다음 요청을 전송합니다:
 
-#### 💬 요청 프롬프트 예시 (선택한 트랙에 맞게 변형 가능):
-* **[분석 트랙 선택 시]**:
-  > *"http://quotes.toscrape.com 에서 명언을 수집해 `artifacts/data/quotes.json`에 저장하고, 수집된 데이터를 바탕으로 저자/태그별 통계 차트와 분석 리포트를 작성해줘."*
-* **[콘텐츠 창작 트랙 선택 시]**:
-  > *"http://quotes.toscrape.com 에서 명언을 수집하고, 이를 바탕으로 직장인을 위한 인스타그램 카드뉴스용 마케팅 카피 5편을 `artifacts/reports/sns_copies.md`로 작성해줘."*
-* **[품질 QA 트랙 선택 시]**:
-  > *"http://quotes.toscrape.com 에서 데이터를 수집하고, 결측치와 태그 데이터의 정합성을 검증하여 정제된 `artifacts/data/quotes_clean.json` 파일과 품질 검증 리포트를 발행해줘."*
+```text
+http://quotes.toscrape.com 사이트의 1~2페이지 명언 데이터를 수집해서
+'artifacts/data/quotes_async.json' 파일에 저장하고 요약 보고서를 작성해줘.
+```
 
-#### 🧪 실행 궤적(Trajectory) 관찰:
-1. **Supervisor 계획 수립**: `enter_plan` ➔ [Task 1: 수집] 및 [Task 2: 서브 에이전트 가공] 태스크 생성
-2. **Task 1 위임**: `invoke_sub_agent(subagent_role="scraper")`로 데이터 수집 완수
-3. **Task 2 위임**: `invoke_sub_agent(subagent_role="[여러분의_서브에이전트]")`로 데이터 2차 가공 및 산출물 생성
-4. **Supervisor 최종 종합**: `exit_plan` 호출 및 사용자에게 최종 결과 브리핑 완료!
+#### 🧪 화면에서 실시간 관찰해야 할 3단계 시퀀스:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 사용자
+    participant UI as Chainlit UI
+    participant Sup as Supervisor
+    participant API as FastAPI Background Worker
+    participant Scraper as Scraper Agent
+
+    User->>UI: "명언 수집해서 quotes_async.json에 저장해줘"
+    UI->>Sup: 요청 전달
+    Sup->>API: invoke_sub_agent(subagent_role="scraper")
+    API-->>Sup: [JOB SUBMITTED: job_a1b2c3d4] (즉시 반환)
+    Sup-->>UI: "작업(job_a1b2c3d4)을 백그라운드에 등록했습니다." (즉시 대화 완료)
+    
+    Note over API,Scraper: 백그라운드에서 Scraper 자율 크롤링 수행
+    API->>Scraper: 독립 프로세스 실행
+    Scraper-->>API: 수집 완료 및 [TASK REPORT] 반환
+
+    Note over API,Sup: 🌟 Event-Driven Reactive Wakeup 발동!
+    API->>Sup: [SYSTEM NOTIFICATION: BACKGROUND TASK COMPLETED] 주입
+    Sup->>Sup: 보고서 검토 및 최종 사용자 브리핑 작성
+    Sup-->>UI: 최종 결과 종합 보고서 자동 출력! 🎉
+```
+
+1. **[즉각 반응]**:
+   - Supervisor가 `invoke_sub_agent`를 호출하면 기다리지 않고 `[JOB SUBMITTED: job_...]`를 받고 즉시 응답을 마칩니다.
+2. **[백그라운드 실행]**:
+   - 터미널 1(`server.py`) 로그에 `⚙️ [Job ...] Started background execution for agent 'scraper'`가 뜨며 Scraper가 백그라운드에서 안전하게 크롤링을 수행합니다.
+3. **[🌟 리액티브 웨이크업 자동 발동]**:
+   - 수집이 완료되면 터미널에 `🚀 Triggering reactive wakeup for 'supervisor'!` 로그가 찍힙니다.
+   - 브라우저 채팅창에서 **아무것도 입력하지 않았는데도** Supervisor가 스스로 나타나 `"수집 작업이 성공적으로 완료되었습니다. 총 20건의 명언이 저장되었습니다..."`라며 완벽한 최종 보고서를 화면에 띄웁니다!
 
 ---
 
 ## ✅ 성공 검증 체크리스트
-- [ ] 해결하고자 하는 목표에 맞는 서브 에이전트의 역할과 프롬프트가 잘 설계되었는가?
-- [ ] `app/agents/`에 신규 서브 에이전트 모듈이 성공적으로 작성되었는가?
-- [ ] `app/agents/supervisor.py`에서 `invoke_sub_agent`의 라우팅 분기가 정상 작동하는가?
-- [ ] `artifacts/` 디렉토리에 서브 에이전트가 생성한 최종 산출물(JSON, PNG, MD 등)이 올바르게 저장되었는가?
-- [ ] Chat UI에서 `Supervisor ➔ Scraper ➔ Custom Sub-Agent`로 이어지는 다단계 오케스트레이션이 완벽히 성공했는가?
+- [ ] `app/agents/supervisor.py`에 `supervisor_tools.py`의 프로덕션 도구들이 성공적으로 연결되었는가?
+- [ ] Supervisor가 작업을 비동기로 넘긴 후 `[JOB SUBMITTED]` 알림과 함께 즉시 턴을 완료하는가?
+- [ ] 서버 로그에서 Scraper가 백그라운드 워커로 독립 실행되는 것을 확인했는가?
+- [ ] 작업 완료 후 **Reactive Wakeup**이 발동하여 사용자 추가 입력 없이 Supervisor가 최종 브리핑을 UI에 렌더링했는가?
 
-축하합니다! 이제 여러분은 단순한 에이전트 사용자를 넘어, **원하는 전문 에이전트를 자유자재로 설계·추가하고 복잡한 엔터프라이즈 워크플로우를 자율 오케스트레이션하는 진정한 AI 에이전트 아키텍트**로 거듭났습니다! 🎓👑🚀
+축하합니다! 여러분은 단순한 대화형 챗봇을 넘어, **장시간 실행되는 복잡한 엔터프라이즈 태스크를 타임아웃 없이 백그라운드로 안전하게 처리하는 이벤트 드리븐(Event-Driven) 에이전트 시스템**을 구축했습니다! 🚀
