@@ -22,12 +22,20 @@ Supervisor 에이전트의 멀티에이전트 오케스트레이션 핵심 도�
 ===============================================================================
 """
 
+import os
 from typing import List
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolRuntime
 
 from app.client import AsyncAgentClient
+
+# FastAPI 백엔드 기본 URL
+FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
+
+# 이 도구 모듈을 사용하는 에이전트의 이름 (콜백 대상 자동 지정에 활용)
+# agents/<agent_name>.py 의 AGENT_METADATA["name"] 값과 일치해야 합니다.
+_CALLER_AGENT_NAME = "supervisor"
 
 # =============================================================================
 # Sub-Agent Protocol 오버레이 메시지 빌더
@@ -92,7 +100,7 @@ async def list_sub_agents() -> str:
             - scraper: 웹 데이터 수집 전문 에이전트
             - analyst: 데이터 분석 및 리포트 생성 전문 에이전트
     """
-    client = AsyncAgentClient(base_url="http://localhost:8000")
+    client = AsyncAgentClient(base_url=FASTAPI_BASE_URL)
     try:
         agents = await client.get_agents()
         if not agents:
@@ -190,15 +198,20 @@ async def invoke_sub_agent(
         [JOB SUBMITTED] formatted string on background launch.
         [BLOCKER: reason] string on failure.
     """
-    # 1. ToolRuntime으로 Supervisor의 thread_id 추출
+    # 1. ToolRuntime으로 호출 에이전트 정보 추출
     supervisor_tid = "supervisor_default"
     if runtime and runtime.execution_info and runtime.execution_info.thread_id:
         supervisor_tid = runtime.execution_info.thread_id
 
+    # 콜백 에이전트 이름: runtime.context에서 동적 추출, 실패 시 모듈 상수로 폴백
+    caller_agent = _CALLER_AGENT_NAME
+    if runtime and hasattr(runtime, "context") and runtime.context:
+        caller_agent = getattr(runtime.context, "agent_name", None) or _CALLER_AGENT_NAME
+
     # 2. Sub-agent 전용 세션 ID 구성 (연속성 보장)
     sub_thread_id = f"{supervisor_tid}_{subagent_role}"
 
-    client = AsyncAgentClient(base_url="http://localhost:8000", timeout=600.0)
+    client = AsyncAgentClient(base_url=FASTAPI_BASE_URL, timeout=600.0)
 
     # 3. Agent Registry 동적 조회 — 유효하지 않은 role 즉시 차단
     try:
@@ -230,7 +243,7 @@ async def invoke_sub_agent(
                 agent_name=subagent_role,
                 message=message,
                 thread_id=sub_thread_id,
-                callback_agent="supervisor",
+                callback_agent=caller_agent,
                 callback_thread_id=supervisor_tid,
             )
             if job_res.get("status") == "error":
@@ -283,7 +296,7 @@ async def get_sub_agent_job_status(job_id: str) -> str:
     Returns:
         Formatted status string containing status (RUNNING, SUCCESS, FAILED) and result/error.
     """
-    client = AsyncAgentClient(base_url="http://localhost:8000", timeout=10.0)
+    client = AsyncAgentClient(base_url=FASTAPI_BASE_URL, timeout=10.0)
     try:
         job = await client.get_job(job_id)
         if not job or job.get("status") == "error":

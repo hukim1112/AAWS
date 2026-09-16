@@ -59,6 +59,31 @@ def load_config(file_path: str, default: dict) -> dict:
         logger.error(f"Error loading config {file_path}: {e}")
     return default
 
+def _create_agent_context(
+    agent_name: str = "unknown",
+    session_id: Optional[str] = None,
+    response_mode: str = "chat"
+) -> AgentContext:
+    """에이전트 실행에 필요한 AgentContext를 일괄 생성합니다.
+    
+    Args:
+        agent_name: 현재 실행 중인 에이전트의 이름 (콜백 대상 자동 지정에 활용)
+        session_id: 세션/스레드 ID
+        response_mode: 응답 모드 ("chat" 등)
+    """
+    logging_cfg = load_config("./configs/logging.config", {"logging_enabled": False, "log_path": "./artifacts/agent_audit_trail.json"})
+    hitl_cfg = load_config("./configs/hitl.config", {"hitl_enabled": False})
+
+    return AgentContext(
+        agent_name=agent_name,
+        session_id=session_id or "unknown",
+        logging_enabled=logging_cfg.get("logging_enabled", False),
+        log_path=logging_cfg.get("log_path", "./artifacts/agent_audit_trail.json"),
+        response_mode=response_mode,
+        hitl_enabled=hitl_cfg.get("hitl_enabled", False),
+        debug_mode=os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true",
+    )
+
 # --- Schemas ---
 class UserInput(BaseModel):
     message: str
@@ -83,7 +108,7 @@ class ResumeInput(BaseModel):
 class JobSubmitInput(BaseModel):
     message: str
     thread_id: Optional[str] = None
-    callback_agent: Optional[str] = "supervisor"
+    callback_agent: Optional[str] = None
     callback_thread_id: Optional[str] = None
 
 # --- In-Memory Job Store for Long-Running Background Tasks ---
@@ -235,16 +260,7 @@ async def invoke_agent(agent_name: str, input_data: UserInput, request: Request)
         agent_executor = await get_or_load_agent(agent_name, request.app)
         config = {"configurable": {"thread_id": input_data.thread_id}, "recursion_limit": 100} if input_data.thread_id else {"recursion_limit": 100}
         
-        logging_cfg = load_config("./configs/logging.config", {"logging_enabled": False, "log_path": "./artifacts/agent_audit_trail.json"})
-        hitl_cfg = load_config("./configs/hitl.config", {"hitl_enabled": False})
-        
-        context_obj = AgentContext(
-            logging_enabled=logging_cfg.get("logging_enabled", False),
-            log_path=logging_cfg.get("log_path", "./artifacts/agent_audit_trail.json"),
-            response_mode="chat",
-            hitl_enabled=hitl_cfg.get("hitl_enabled", False),
-            debug_mode=os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-        )
+        context_obj = _create_agent_context(agent_name=agent_name, session_id=input_data.thread_id)
         
         if input_data.thread_id:
             add_message(input_data.thread_id, "user", input_data.message)
@@ -279,15 +295,7 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
         agent_executor = await get_or_load_agent(agent_name, app)
         config = {"configurable": {"thread_id": input_data.thread_id}, "recursion_limit": 100} if input_data.thread_id else {"recursion_limit": 100}
 
-        logging_cfg = load_config("./configs/logging.config", {"logging_enabled": False, "log_path": "./artifacts/agent_audit_trail.json"})
-        hitl_cfg = load_config("./configs/hitl.config", {"hitl_enabled": False})
-        context_obj = AgentContext(
-            logging_enabled=logging_cfg.get("logging_enabled", False),
-            log_path=logging_cfg.get("log_path", "./artifacts/agent_audit_trail.json"),
-            response_mode="chat",
-            hitl_enabled=hitl_cfg.get("hitl_enabled", False),
-            debug_mode=os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-        )
+        context_obj = _create_agent_context(agent_name=agent_name, session_id=input_data.thread_id)
 
         if input_data.thread_id:
             add_message(input_data.thread_id, "user", input_data.message)
@@ -322,7 +330,7 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
                     f"- Job ID: {job_id}\n"
                     f"- Sub-Agent: {agent_name}\n"
                     f"- Report Content:\n{task_report}\n\n"
-                    f"[INSTRUCTION FOR SUPERVISOR]\n"
+                    f"[INSTRUCTION FOR {cb_agent.upper()}]\n"
                     f"위 서브에이전트의 완료 보고서와 생성된 산출물을 바탕으로 다음 작업을 수행하거나 유저에게 답변합니다 "
                     f"생성된 차트 이미지나 HTML 대시보드가 있다면 UI 렌더링 태그(<Render_HTML>, <Render_Image>, <Render_File>)를 통해 출력 가능합니다."
                 )
@@ -330,10 +338,13 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
                 cb_config = {"configurable": {"thread_id": cb_thread_id}, "recursion_limit": 100}
                 add_message(cb_thread_id, "user", trigger_prompt)
 
+                # 🌟 콜백 에이전트 전용 컨텍스트(자신의 agent_name과 thread_id) 생성
+                cb_context_obj = _create_agent_context(agent_name=cb_agent, session_id=cb_thread_id)
+
                 sup_result = await cb_executor.ainvoke(
                     {"messages": [("user", trigger_prompt)]},
                     config=cb_config,
-                    context=context_obj
+                    context=cb_context_obj
                 )
                 sup_last = sup_result["messages"][-1]
                 sup_response = sanitize_text(normalize_content(sup_last.content))
@@ -420,16 +431,7 @@ async def stream_agent(agent_name: str, input_data: StreamInput, request: Reques
         try:
             config = {"configurable": {"thread_id": input_data.thread_id}, "recursion_limit": 100} if input_data.thread_id else {"recursion_limit": 100}
             
-            logging_cfg = load_config("./configs/logging.config", {"logging_enabled": False, "log_path": "./artifacts/agent_audit_trail.json"})
-            hitl_cfg = load_config("./configs/hitl.config", {"hitl_enabled": False})
-            
-            context_obj = AgentContext(
-                logging_enabled=logging_cfg.get("logging_enabled", False),
-                log_path=logging_cfg.get("log_path", "./artifacts/agent_audit_trail.json"),
-                response_mode="chat",
-                hitl_enabled=hitl_cfg.get("hitl_enabled", False),
-                debug_mode=os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-            )
+            context_obj = _create_agent_context(agent_name=agent_name, session_id=input_data.thread_id)
             
             if input_data.thread_id:
                 add_message(input_data.thread_id, "user", input_data.message)

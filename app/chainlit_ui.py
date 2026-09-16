@@ -14,6 +14,7 @@ import re
 import json
 import html
 import asyncio
+import mimetypes
 import chainlit as cl
 from chainlit.types import ThreadDict
 from typing import Dict, Any, Optional, List
@@ -138,17 +139,42 @@ async def _process_sse_stream(
     """
     SSE 이벤트를 순회하며 cl.Step / stream_token으로 렌더링합니다.
     interrupt 이벤트가 발생하면 해당 이벤트를 반환하고, 없으면 None을 반환합니다.
+
+    도구 호출이 여러 개일 경우 부모 Step 아래에 그룹화하여
+    UI가 도구 호출 리스트로 가득 차는 것을 방지합니다.
     """
+    tool_group_step: Optional[cl.Step] = None  # 도구 그룹 부모 Step
+    tool_count = 0           # 총 도구 호출 수
+    completed_count = 0      # 완료된 도구 수
+
     async for event in stream_generator:
         event_type = event.get("type")
 
-        # 1. 도구 호출 시작 → cl.Step 트리 렌더링
+        # 1. 도구 호출 시작 → 그룹 Step 하위에 중첩 렌더링
         if event_type == "tool_start":
             tool_name = event.get("name", "Tool")
             tool_input = event.get("input", "")
             run_id = event.get("run_id", str(uuid.uuid4()))
+            tool_count += 1
 
-            step = cl.Step(name=f"🛠️ {tool_name}", type="tool")
+            # 첫 번째 도구 호출 시 그룹 부모 Step 생성
+            if tool_group_step is None:
+                tool_group_step = cl.Step(
+                    name="도구 모음",
+                    type="tool",
+                )
+                tool_group_step.output = f"도구 1개 실행 중..."
+                await tool_group_step.send()
+            else:
+                tool_group_step.output = f"도구 {tool_count}개 실행 중..."
+                await tool_group_step.update()
+
+            # 개별 도구 Step → 그룹 부모의 자식으로 중첩
+            step = cl.Step(
+                name=f"🛠️ {tool_name}",
+                type="tool",
+                parent_id=tool_group_step.id,
+            )
             step.input = sanitize_text(str(tool_input))
             await step.send()
             active_steps[run_id] = step
@@ -162,11 +188,25 @@ async def _process_sse_stream(
                 step.output = sanitize_text(str(tool_output))
                 await step.update()
                 del active_steps[run_id]
+                completed_count += 1
+
+                # 그룹 Step 진행 상태 업데이트
+                if tool_group_step:
+                    if completed_count < tool_count:
+                        tool_group_step.output = f"도구 호출 진행 중 ({completed_count}/{tool_count} 완료)"
+                    else:
+                        tool_group_step.output = f"{tool_count}개의 도구가 성공적으로 호출되었습니다."
+                    await tool_group_step.update()
 
         # 3. 모델 토큰 스트리밍
         elif event_type == "token":
             content = event.get("content", "")
             if content:
+                # 새 토큰 스트리밍이 시작되면 이전 도구 그룹 마무리
+                if tool_group_step and completed_count >= tool_count and tool_count > 0:
+                    tool_group_step = None
+                    tool_count = 0
+                    completed_count = 0
                 await final_message.stream_token(content)
 
         # 4. HITL Interrupt — 즉시 반환
@@ -178,6 +218,11 @@ async def _process_sse_stream(
             error_msg = event.get("error") or event.get("content", "알 수 없는 에러")
             await cl.Message(content=f"❌ **에러:** {error_msg}").send()
             return None
+
+    # 정상 종료 시 미완료 그룹 Step 마무리
+    if tool_group_step and tool_count > 0:
+        tool_group_step.output = f"{tool_count}개의 도구가 성공적으로 호출되었습니다."
+        await tool_group_step.update()
 
     return None  # 정상 종료 (interrupt 없음)
 
@@ -248,25 +293,6 @@ async def _collect_hitl_decisions(interrupt_event: dict) -> List[dict]:
     return decisions
 
 
-# ── 7-1. 대시보드 사이드 패널 다시 열기 콜백 ────────────────────
-@cl.action_callback("reopen_dashboard")
-async def on_reopen_dashboard(action: cl.Action):
-    """사용자가 '대시보드 사이드 패널 열기' 버튼을 클릭하면 사이드 패널에 대시보드를 다시 띄웁니다."""
-    payload = action.payload or {}
-    html_content = payload.get("html_content", "")
-    title = payload.get("title", "데이터 분석 대시보드")
-
-    if html_content:
-        element = cl.CustomElement(
-            name="HtmlDashboard",
-            props={"html_content": html_content, "title": title, "height": "80vh"},
-            display="side",
-        )
-        await cl.Message(
-            content=f"📊 **[{title}]** 대시보드를 우측 사이드 패널에 다시 열었습니다.",
-            elements=[element],
-            author="Agent Assistant"
-        ).send()
 
 
 # ── 8. Render_* 태그 파싱 및 메시지 렌더링 공통 함수 ──────────
@@ -296,7 +322,7 @@ async def _render_agent_response(raw_content: str, author: str = "Agent Assistan
             elements.append(cl.Image(name=alt_text or os.path.basename(resolved_p), path=resolved_p, display="inline"))
             clean_content = clean_content.replace(f"![{alt_text}]({raw_img})", "")
 
-    # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — Blob URL 방식)
+    # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — 인라인 토글 방식)
     html_matches = re.findall(r"<Render_HTML>(.*?)</Render_HTML>", raw_content)
     for raw_html in html_matches:
         resolved_p = _resolve_existing_path(raw_html)
@@ -311,16 +337,12 @@ async def _render_agent_response(raw_content: str, author: str = "Agent Assistan
             elements.append(cl.CustomElement(
                 name="HtmlDashboard",
                 props={"html_content": html_content, "title": fname, "height": "80vh"},
-                display="side",
+                display="inline",
             ))
-            actions.append(cl.Action(
-                name="reopen_dashboard",
-                label=f"📊 {fname} 사이드 패널 열기",
-                payload={"html_content": html_content, "title": fname}
-            ))
+
             clean_content = clean_content.replace(
                 f"<Render_HTML>{raw_html}</Render_HTML>",
-                f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(우측 사이드 패널에 표시됩니다. 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
+                f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(접기/펼치기로 토글하거나, 새 탭 버튼으로 전체화면 열기 가능)*\n\n"
             )
         else:
             clean_content = clean_content.replace(f"<Render_HTML>{raw_html}</Render_HTML>", "")
@@ -331,7 +353,8 @@ async def _render_agent_response(raw_content: str, author: str = "Agent Assistan
         resolved_p = _resolve_existing_path(raw_f)
         if resolved_p:
             fname = os.path.basename(resolved_p)
-            elements.append(cl.File(name=fname, path=resolved_p))
+            mime_type = mimetypes.guess_type(resolved_p)[0] or "application/octet-stream"
+            elements.append(cl.File(name=fname, path=resolved_p, mime=mime_type))
             clean_content = clean_content.replace(
                 f"<Render_File>{raw_f}</Render_File>",
                 f"\n\n> 📊 **보고서 파일 첨부됨**: `{fname}`\n\n"
@@ -515,7 +538,7 @@ async def _render_streamed_message(final_message: cl.Message, raw_content: str) 
             elements.append(cl.Image(name=alt_text or os.path.basename(resolved_p), path=resolved_p, display="inline"))
             clean_content = clean_content.replace(f"![{alt_text}]({raw_img})", "")
 
-    # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — Blob URL 방식)
+    # (3) <Render_HTML>...</Render_HTML> 처리 (인터랙티브 HTML 대시보드 — 인라인 토글 방식)
     html_matches = re.findall(r"<Render_HTML>(.*?)</Render_HTML>", raw_content)
     for raw_html in html_matches:
         resolved_p = _resolve_existing_path(raw_html)
@@ -530,16 +553,12 @@ async def _render_streamed_message(final_message: cl.Message, raw_content: str) 
             elements.append(cl.CustomElement(
                 name="HtmlDashboard",
                 props={"html_content": html_content, "title": fname, "height": "80vh"},
-                display="side",
+                display="inline",
             ))
-            actions.append(cl.Action(
-                name="reopen_dashboard",
-                label=f"📊 {fname} 사이드 패널 열기",
-                payload={"html_content": html_content, "title": fname}
-            ))
+
             clean_content = clean_content.replace(
                 f"<Render_HTML>{raw_html}</Render_HTML>",
-                f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(우측 사이드 패널에 표시됩니다. 닫힌 경우 아래 버튼을 누르면 다시 열립니다)*\n\n"
+                f"\n\n> 🌐 **인터랙티브 대시보드**: `{fname}`\n> *(접기/펼치기로 토글하거나, 새 탭 버튼으로 전체화면 열기 가능)*\n\n"
             )
         else:
             clean_content = clean_content.replace(f"<Render_HTML>{raw_html}</Render_HTML>", "")
@@ -550,7 +569,8 @@ async def _render_streamed_message(final_message: cl.Message, raw_content: str) 
         resolved_p = _resolve_existing_path(raw_f)
         if resolved_p:
             fname = os.path.basename(resolved_p)
-            elements.append(cl.File(name=fname, path=resolved_p))
+            mime_type = mimetypes.guess_type(resolved_p)[0] or "application/octet-stream"
+            elements.append(cl.File(name=fname, path=resolved_p, mime=mime_type))
             clean_content = clean_content.replace(
                 f"<Render_File>{raw_f}</Render_File>",
                 f"\n\n> 📊 **보고서 파일 첨부됨**: `{fname}`\n\n"
