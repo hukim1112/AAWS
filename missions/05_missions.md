@@ -1,6 +1,8 @@
-# 🎯 Mission 05: 나만의 커스텀 서브 에이전트(Custom Sub-Agent) 기획·개발 및 Supervisor 연동
+# 🎯 Mission 05: 나만의 커스텀 서브 에이전트(Custom Sub-Agent) 기획·개발 및 플러그인 연동
 
 본 미션은 지금까지 배운 에이전트 설계 기법(ReAct, Tool 바인딩, System Prompt, Context Isolation, Long-Running 비동기 아키텍처)을 종합하여, **여러분만의 창의적인 전문 서브 에이전트(Custom Sub-Agent)를 직접 기획·구현하고 `supervisor`에 연결하여 2단계 이상의 자율 협업 파이프라인을 완성**하는 최종 캡스톤 실습 과제입니다.
+
+Mission 04에서 구축한 **동적 에이전트 레지스트리(Dynamic Agent Registry) 기반의 플러그 앤 플레이(Plug-and-Play) 아키텍처** 덕분에, Supervisor 코드를 일절 수정하지 않고도 파일 추가만으로 새로운 전문 에이전트를 즉시 오케스트레이션에 참여시킬 수 있습니다!
 
 Supervisor 아래에 어떤 전문 영역의 에이전트를 둘 것인지는 **여러분의 자유로운 선택**에 달려 있습니다!
 
@@ -8,7 +10,7 @@ Supervisor 아래에 어떤 전문 영역의 에이전트를 둘 것인지는 **
 
 ## 📂 실습 대상 및 핵심 파일
 * **신규 서브 에이전트 파일**: `app/agents/[자신만의_에이전트명].py` (직접 구현)
-* **총괄 오케스트레이터 파일**: `app/agents/supervisor.py` (하위 에이전트 분기 연결)
+* **총괄 오케스트레이터 파일**: `app/agents/supervisor.py` (수정 불필요! 서버가 동적으로 감지)
 * **활용 도구 모음**: `app/tools/common.py` 및 커스텀 도구
 * **산출물 보관소**: `artifacts/` (리포트, 정제 데이터, 콘텐츠 등)
 
@@ -16,8 +18,8 @@ Supervisor 아래에 어떤 전문 영역의 에이전트를 둘 것인지는 **
 
 ## 📋 미션 목표
 1. **[도메인 선택 및 기획]**: 해결하고 싶은 문제에 맞는 서브 에이전트의 역할(Persona), 도구(Tools), 기대 산출물을 정의합니다.
-2. **[서브 에이전트 모듈 구현]**: `app/agents/` 디렉토리에 독립된 에이전트 모듈을 작성합니다.
-3. **[Supervisor 위임 분기 연동]**: `app/agents/supervisor.py`의 `invoke_sub_agent` 도구에 신규 에이전트 분기 로직을 연결합니다.
+2. **[서브 에이전트 모듈 구현]**: `app/agents/` 디렉토리에 독립된 에이전트 모듈(`[에이전트명].py`)을 작성합니다.
+3. **[동적 플러그앤플레이 확인]**: 서버 가동 시 별도의 코드 수정 없이 새 에이전트가 자동 감지(`list_sub_agents`)되는지 확인합니다.
 4. **[End-to-End 멀티에이전트 통합 검증]**: Chat UI에서 Supervisor에게 복합 지시를 내려 **`Supervisor ➔ Scraper(수집) ➔ Custom Sub-Agent(가공/분석/창작)`**의 전체 파이프라인이 매끄럽게 동작하는지 확인합니다.
 
 ---
@@ -54,7 +56,7 @@ from app.tools.common import file_read, file_writer, bash_command, glob_search
 from app.utils.context import AgentContext
 
 AGENT_METADATA = {
-    "name": "custom_worker",  # 여러분의 에이전트 이름
+    "name": "custom_worker",  # 여러분의 에이전트 이름 (소문자 권장)
     "description": "특정 전문 작업을 수행하는 서브 에이전트"
 }
 
@@ -75,7 +77,7 @@ WORKER_SYSTEM_PROMPT = """
    - Issues: None
 """
 
-# 2. 에이전트 팩토리 함수
+# 2. 에이전트 팩토리 함수 (이 함수가 있어야 서버가 자동 로드합니다)
 async def create_agent_executor():
     llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
     
@@ -93,69 +95,33 @@ async def create_agent_executor():
 
 ---
 
-### 2단계: `app/agents/supervisor.py`에 서브 에이전트 분기 연결
+### 2단계: 서버 가동 및 동적 플러그인(Plug-and-Play) 자동 로드 확인
 
-`app/agents/supervisor.py` 파일을 열고, `invoke_sub_agent` 함수(또는 도구 라우팅)에 새로 만든 서브 에이전트를 호출할 수 있도록 분기 로직을 추가합니다:
+> 💡 **[Supervisor 코드 수정 불필요!]**:
+> Mission 04에서 탑재한 프로덕션 도구(`app/tools/supervisor_tools.py`)는 서버의 에이전트 레지스트리(`GET /agents`)를 동적으로 조회합니다.
+> 따라서 **`supervisor.py`에 if/else 분기 코드를 일절 추가할 필요가 없으며**, `app/agents/` 폴더에 파일이 존재하는 것만으로 시스템이 즉시 새로운 전문 에이전트를 인식합니다!
 
-```python
-# app/agents/supervisor.py 수정 예시 (Mission 03 인프로세스 방식 기준)
-
-from app.agents.scraper import create_agent_executor as create_scraper_executor
-from app.agents.custom_worker import create_agent_executor as create_custom_worker_executor  # 👈 추가!
-
-@tool(args_schema=InvokeSubAgentInput)
-async def invoke_sub_agent(task_instruction: str, target_file_list: List[str] = [], subagent_role: str = "scraper") -> str:
-    """하위 전문 에이전트를 동적으로 분기 실행합니다."""
-    
-    file_list_str = ", ".join(target_file_list) if target_file_list else "지정 파일 없음"
-    role_normalized = subagent_role.lower()
-    
-    # 💡 역할(Role) 키워드에 따른 동적 에이전트 라우팅
-    if "custom" in role_normalized or "analyst" in role_normalized or "creator" in role_normalized:
-        worker = await create_custom_worker_executor()
-        worker_type = subagent_role
-    else:
-        worker = await create_scraper_executor()
-        worker_type = "Scraper"
-        
-    prompt = f"""Target File List: {file_list_str}
-Instruction: {task_instruction}
-
-[수행 지침]
-1. 역할을 성실히 수행하고, 결과 산출물을 디스크(artifacts/)에 저장하세요.
-2. 작업 완료 후 반드시 [TASK REPORT] 규격(Status, Target Files, Artifacts Created, Summary, Issues)으로 보고하세요.
-"""
-
-    config = {"configurable": {"thread_id": f"{worker_type.lower()}_{int(asyncio.get_event_loop().time() * 1000)}"}}
-    response = await worker.ainvoke(
-        {"messages": [HumanMessage(content=prompt)]},
-        config=config
-    )
-    
-    return normalize_content(response["messages"][-1].content)
+1. 터미널 1에서 FastAPI 서버를 가동(또는 재가동)합니다:
+```bash
+python app/server.py --port 8000
 ```
-
-> 💡 **참고 (Mission 04의 `supervisor_tools.py`를 사용할 경우)**:
-> `app/tools/supervisor_tools.py`는 FastAPI의 에이전트 레지스트리(`GET /agents`)를 동적으로 조회하므로, `app/agents/custom_worker.py` 파일만 생성해 두면 별도의 코드 수정 없이도 `subagent_role="custom_worker"`를 지정하여 즉시 백그라운드 위임이 가능합니다!
+2. 콘솔 출력에서 여러분이 만든 에이전트가 정상 로드되었는지 확인합니다:
+```text
+INFO: ✅ Loaded agent module: app.agents.[여러분의_에이전트명]
+INFO: Uvicorn running on http://0.0.0.0:8000
+```
+3. 이제 Supervisor는 작업 계획을 세울 때 `list_sub_agents` 도구를 통해 여러분의 에이전트를 발견하고, `invoke_sub_agent(subagent_role="[여러분의_에이전트명]")`으로 작업을 자율 위임할 수 있습니다!
 
 ---
 
-### 3단계: 서버 및 Chat UI 가동
+### 3단계: Chat UI 가동 및 복합 파이프라인 통합 테스트
 
+1. 터미널 2에서 Chainlit UI를 실행합니다:
 ```bash
-# 터미널 1 (FastAPI 서버 가동)
-python app/server.py --port 8000
-
-# 터미널 2 (Chainlit UI 가동)
 chainlit run app/chainlit_ui.py --port 8080
 ```
-
----
-
-### 4단계: Chat UI에서 복합 파이프라인 통합 테스트
-
-1. 웹 브라우저(`http://localhost:8080`)에 접속하여 **`supervisor`** 에이전트를 선택합니다.
-2. 채팅창에 **수집과 여러분의 서브 에이전트 작업이 결합된 복합 미션**을 요청합니다.
+2. 웹 브라우저(`http://localhost:8080`)에 접속하여 **`supervisor`** 에이전트를 선택합니다.
+3. 채팅창에 **수집과 여러분의 서브 에이전트 작업이 결합된 복합 미션**을 요청합니다.
 
 #### 💬 요청 프롬프트 예시 (선택한 트랙에 맞게 변형 가능):
 * **[분석 트랙 선택 시]**:
@@ -176,7 +142,8 @@ chainlit run app/chainlit_ui.py --port 8080
 ## ✅ 성공 검증 체크리스트
 - [ ] 해결하고자 하는 목표에 맞는 서브 에이전트의 역할과 프롬프트가 잘 설계되었는가?
 - [ ] `app/agents/`에 신규 서브 에이전트 모듈이 성공적으로 작성되었는가?
-- [ ] Supervisor가 신규 서브 에이전트에게 작업을 정상적으로 위임하는가?
+- [ ] 서버 콘솔에서 신규 에이전트가 `✅ Loaded agent module`로 자동 로드되었는가?
+- [ ] Supervisor가 별도의 코드 수정 없이 신규 서브 에이전트에게 작업을 정상적으로 위임하는가?
 - [ ] `artifacts/` 디렉토리에 서브 에이전트가 생성한 최종 산출물(JSON, PNG, MD 등)이 올바르게 저장되었는가?
 - [ ] Chat UI에서 `Supervisor ➔ Scraper ➔ Custom Sub-Agent`로 이어지는 다단계 오케스트레이션이 완벽히 성공했는가?
 
