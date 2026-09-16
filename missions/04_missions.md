@@ -28,7 +28,7 @@
 
 ## 📋 미션 목표
 1. **[프로덕션 도구 확인]**: `app/tools/supervisor_tools.py`에 구현된 3대 오케스트레이션 도구(`list_sub_agents`, `invoke_sub_agent`, `get_sub_agent_job_status`)의 역할을 확인합니다.
-2. **[Supervisor 도구 교체]**: `app/agents/supervisor.py`에서 기존 로컬 인프로세스 함수 대신 `app/tools/supervisor_tools.py`의 도구들을 임포트하여 바인딩합니다.
+2. **[Supervisor 도구 교체 & 원칙 반영]**: `app/agents/supervisor.py`에서 기존 로컬 인프로세스 함수 대신 `app/tools/supervisor_tools.py`의 도구들을 임포트하여 바인딩하고, 시스템 프롬프트에 백그라운드 비동기 위임 원칙을 반영합니다.
 3. **[서버 & Chat UI 가동]**: FastAPI 백엔드와 Chainlit 프론트엔드를 실행합니다.
 4. **[비동기 실행 & 리액티브 웨이크업 검증]**:
    - Chat UI에서 Supervisor에게 웹 스크래핑을 지시합니다.
@@ -49,9 +49,9 @@
 
 ---
 
-### 2단계: `app/agents/supervisor.py`에서 도구 교체하기 (단 2줄 수정!)
+### 2단계: `app/agents/supervisor.py`에서 도구 교체 및 백그라운드 위임 원칙 반영하기
 
-`app/agents/supervisor.py` 파일을 열고, 기존의 인프로세스 도구 대신 `supervisor_tools.py`의 프로덕션 도구를 장착합니다:
+`app/agents/supervisor.py` 파일을 열고, 기존의 인프로세스 도구 대신 `supervisor_tools.py`의 프로덕션 도구를 장착하고 시스템 프롬프트에 **백그라운드 위임 원칙**을 보강합니다:
 
 ```python
 # app/agents/supervisor.py
@@ -65,12 +65,45 @@ from app.tools.supervisor_tools import (
 # 또는 tools_supervisor를 통째로 임포트할 수도 있습니다:
 # from app.tools import tools_supervisor
 
-# ... (기존 설정 유지)
+# ── 2. 시스템 프롬프트에 백그라운드 위임 원칙 보강 ──
+# (Mission 03의 [작업 원칙] 2번에 '백그라운드 위임 원칙'을 추가합니다)
+SUPERVISOR_SYSTEM_PROMPT = """당신은 사용자의 요청을 편안하게 도와드리는 유능한 AI 어시스턴트입니다.
+질문에 답하고, 정보를 검색하고, 코드를 작성하고, 파일을 다루는 등 다양한 범용 작업을 직접 수행합니다.
+필요한 경우에는 전문 에이전트를 활용하여 웹 데이터 수집, 심층 분석 같은 복잡한 작업도 해결합니다.
 
+═══════════════════════════════════════════════════════════════
+[작업 원칙]
+═══════════════════════════════════════════════════════════════
+
+1. **작업 규모에 맞게 처리하기**:
+   - 간단한 질의나 즉시 처리가 가능한 작업은 곧바로 수행하세요.
+   - 여러 단계가 필요한 복잡한 작업은 계획을 먼저 세우고 수행하세요.
+   - 전문가에게 작업을 위임할 때는 수립한 계획도 함께 공유하여 전체 맥락을 파악하고 일할 수 있게 하세요.
+
+2. **전문가 활용하기 & 백그라운드 위임 원칙 (CRITICAL)**:
+   - **`run_in_background=True` (기본 원칙)**:
+     웹 데이터 수집, 스크래핑 등 산출물을 생성하거나 여러 단계의 도구를 거치는 모든 실무 작업은 반드시 `run_in_background=True`로 위임하세요.
+     백그라운드 위임 시 사용자에게는 작업이 백그라운드에서 시작되었음과 Job ID를 간결하게 안내하세요.
+     작업이 완료되면 서버가 자동으로 당신을 다시 호출(Wakeup)하므로, 그때 최종 보고서를 브리핑하세요.
+   - **`run_in_background=False` (예외)**:
+     "에이전트 기능 설명해줘", "1줄 요약해줘" 같은 초경량 단순 질의에만 예외적으로 사용하세요.
+   - 상세 위임 절차 및 파라미터는 `invoke_sub_agent` 도구의 설명을 참고하세요.
+
+3. **실패해도 멈추지 않기**:
+   - 위임한 작업이 막히거나 장애([BLOCKER])가 발생하더라도 포기하지 마세요.
+   - 원인을 파악하고 대안 경로를 찾아 끝까지 완수하세요.
+
+═══════════════════════════════════════════════════════════════
+[답변 방식]
+═══════════════════════════════════════════════════════════════
+
+- 친근하고 명확한 어조로 답변하며, 불필요한 장황한 설명보다는 결과 중심으로 답변하세요.
+- 수집된 데이터나 상세 산출물은 파일(artifacts/)로 저장하고, 사용자에게는 핵심 요약과 파일 경로를 깔끔하게 전달하세요.
+"""
+
+# ── 3. 에이전트 도구 목록 교체 ──
 async def create_agent_executor():
     # ...
-    
-    # ── 2. 에이전트 도구 목록 교체 ──
     tools = [
         enter_plan, exit_plan, task_create, task_list, task_update,
         # 프로덕션 3대 오케스트레이션 도구 장착:
@@ -127,7 +160,7 @@ sequenceDiagram
 
     User->>UI: "명언 수집해서 quotes_async.json에 저장해줘"
     UI->>Sup: 요청 전달
-    Sup->>API: invoke_sub_agent(subagent_role="scraper")
+    Sup->>API: invoke_sub_agent(subagent_role="scraper", run_in_background=True)
     API-->>Sup: [JOB SUBMITTED: job_a1b2c3d4] (즉시 반환)
     Sup-->>UI: "작업(job_a1b2c3d4)을 백그라운드에 등록했습니다." (즉시 대화 완료)
     
@@ -142,7 +175,7 @@ sequenceDiagram
 ```
 
 1. **[즉각 반응]**:
-   - Supervisor가 `invoke_sub_agent`를 호출하면 기다리지 않고 `[JOB SUBMITTED: job_...]`를 받고 즉시 응답을 마칩니다.
+   - Supervisor가 프롬프트 원칙에 따라 `run_in_background=True`로 `invoke_sub_agent`를 호출하면 기다리지 않고 `[JOB SUBMITTED: job_...]`를 받고 즉시 응답을 마칩니다.
 2. **[백그라운드 실행]**:
    - 터미널 1(`server.py`) 로그에 `⚙️ [Job ...] Started background execution for agent 'scraper'`가 뜨며 Scraper가 백그라운드에서 안전하게 크롤링을 수행합니다.
 3. **[🌟 리액티브 웨이크업 자동 발동]**:
@@ -153,6 +186,7 @@ sequenceDiagram
 
 ## ✅ 성공 검증 체크리스트
 - [ ] `app/agents/supervisor.py`에 `supervisor_tools.py`의 프로덕션 도구들이 성공적으로 연결되었는가?
+- [ ] 시스템 프롬프트에 백그라운드 위임 원칙(`run_in_background=True` 및 Job ID 안내)이 정상 반영되었는가?
 - [ ] Supervisor가 작업을 비동기로 넘긴 후 `[JOB SUBMITTED]` 알림과 함께 즉시 턴을 완료하는가?
 - [ ] 서버 로그에서 Scraper가 백그라운드 워커로 독립 실행되는 것을 확인했는가?
 - [ ] 작업 완료 후 **Reactive Wakeup**이 발동하여 사용자 추가 입력 없이 Supervisor가 최종 브리핑을 UI에 렌더링했는가?
