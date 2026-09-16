@@ -15,6 +15,7 @@
 | **에이전트 구성** | Navigator / Coder 분리 구조 | **Scraper 단일 전문 에이전트로 통합** |
 | **Supervisor 패턴** | 단순 메시지 라우팅 방식 | **Blackboard 패턴 (Planning 문서 공유로 정보격차 해소)** |
 | **브라우저 제어** | 개별 Playwright 인스턴스 | **`PlaywrightManager` CDP 공유 싱글턴 (세션/쿠키 유지)** |
+| **비동기 오케스트레이션** | 동기식 인프로세스 차단 | **이벤트 기반 Reactive Wakeup & 백그라운드 작업 큐** |
 | **에이전트 프레임워크** | LangChain 구버전 파이프라인 | **LangChain 1.3+ / LangGraph 1.2+ / Python 3.12** |
 
 > 💡 **v1.0 (구버전) 코드가 필요한 경우:**  
@@ -28,7 +29,7 @@
 
 전통적인 크롤링은 개발자가 직접 HTML 구조를 분석하고, 셀렉터를 찾고, 코드를 작성해야 합니다. 사이트 구조가 바뀌면 모든 코드를 처음부터 다시 고쳐야 하죠. AAWS는 이 과정을 지능형 AI 에이전트들에게 전적으로 위임합니다.
 
-본 프로젝트에서 교육생은 **4개의 핸즈온 노트북**으로 에이전트의 핵심 원리를 학습한 뒤, **4개의 실습 미션**을 통해 프로덕션 수준의 에이전트 시스템을 직접 조립·고도화하고, **9개 난이도별 시나리오 자동 평가**로 성능을 객관적으로 검증합니다.
+본 프로젝트에서 교육생은 **4개의 핸즈온 노트북**으로 에이전트의 핵심 원리를 학습한 뒤, **5개의 실습 미션**을 통해 프로덕션 수준의 에이전트 시스템을 직접 조립·고도화하고, **9개 난이도별 시나리오 자동 평가**로 성능을 객관적으로 검증합니다.
 
 > *"AI 에이전트들이 복잡한 웹 환경에서 어떻게 상호작용하고, 스스로의 오류를 정정하며 완결된 결과물을 만들어 낼 수 있을까?"*
 
@@ -125,9 +126,10 @@ notebooks/
 ```
 missions/
 ├── 01_missions.md    # 🧠 커스텀 기억 도구(읽기/갱신) 구현 및 Chatbot 연결
-├── 02_missions.md    # 🧪 Scraper 시나리오 자동 평가 실행 및 분석
-├── 03_missions.md    # 👑 Supervisor 멀티에이전트 오케스트레이터 구축
-└── 04_missions.md    # 🎨 나만의 커스텀 서브 에이전트 기획·개발 및 연동
+├── 02_missions.md    # 🧪 Scraper 시나리오 자동 평가 실행 및 아티팩트 분석
+├── 03_missions.md    # 👑 Supervisor 멀티에이전트 구축 및 Scraper 위임 (Blackboard 패턴)
+├── 04_missions.md    # ⚡ Long-Running Agent 아키텍처 연동 및 Prompt-as-Code 리팩토링
+└── 05_missions.md    # 🎨 [Capstone] 나만의 커스텀 서브 에이전트 기획·개발 및 플러그인 연동
 ```
 
 ---
@@ -139,7 +141,7 @@ missions/
 ```
 AAWS/
 ├── notebooks/              # 📗 핸즈온 실습 노트북 (1~4)
-├── missions/               # 🎯 실습 미션 가이드 (01~04)
+├── missions/               # 🎯 실습 미션 가이드 (01~05)
 ├── lessons_summary/        # 📚 실전 에이전트 아키텍처 & 설계 패턴 교훈 바이블
 │   ├── 01_Agent_Engineering_Principles.md # 도구 설계(Curated View), Prompt-as-Code, EDD 평가 하네스
 │   ├── 02_Subagent.md                     # Dynamic Context Pruning, Blackboard 패턴, Sub-Agent Protocol
