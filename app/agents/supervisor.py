@@ -31,8 +31,9 @@
    - 도구 바인딩 (계획 도구 5종 + invoke_sub_agent + 공용 파일 도구)
    - create_agent()로 supervisor_agent 생성 및 반환
 
-── [Mission 04: Long-Running 비동기 아키텍처 업그레이드] ──
-5. 프로덕션 도구 교체 (missions/04_missions.md):
+── [Mission 04: Long-Running 비동기 아키텍처 및 Prompt-as-Code 업그레이드] ──
+5. Prompt-as-Code 분리 및 프로덕션 도구 교체 (missions/04_missions.md):
+   - `app/prompts/SUPERVISOR.py`를 생성하여 프롬프트를 독립 모듈로 분리하고 백그라운드 위임 원칙을 반영
    - 로컬 인프로세스 함수 대신 제공된 `app.tools.supervisor_tools` 모듈을 임포트하여
      도구 목록에 교체 바인딩하면, 비동기 백그라운드 Job 및 리액티브 웨이크업이 즉시 활성화됩니다!
 ===============================================================================
