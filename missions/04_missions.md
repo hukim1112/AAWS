@@ -24,7 +24,7 @@
 * **에이전트 리팩토링 대상 파일**: `app/agents/supervisor.py` (프롬프트 임포트 & 도구 교체)
 * **백엔드 서버 엔진**: `app/server.py` (`/agents/{role}/jobs` 및 리액티브 워커)
 * **프론트엔드 실시간 모니터**: `app/chainlit_ui.py` (작업 폴링 및 실시간 렌더링)
-* **참고 이론 문서**: `lessons_summary/Long_running_agent.md`, `lessons_summary/Agent_Engineering_Principles.md`
+* **참고 이론 문서**: `lessons_summary/03_Long_running_agent.md`, `lessons_summary/01_Agent_Engineering_Principles.md`
 
 ---
 
@@ -54,7 +54,7 @@
 
 ### 2단계: Prompt-as-Code — `app/prompts/SUPERVISOR.py` 분리 생성하기
 
-비즈니스 로직과 프롬프트를 분리하는 **Prompt-as-Code** 원칙(`Agent_Engineering_Principles.md` 2.1절)에 따라, `app/prompts/SUPERVISOR.py` 파일을 신규 생성하고 **백그라운드 위임 원칙**을 담은 완성형 프롬프트를 작성합니다:
+비즈니스 로직과 프롬프트를 분리하는 **Prompt-as-Code** 원칙(`01_Agent_Engineering_Principles.md` 2.1절)에 따라, `app/prompts/SUPERVISOR.py` 파일을 신규 생성하고 **백그라운드 위임 원칙**을 담은 완성형 프롬프트를 작성합니다:
 
 #### 📄 `app/prompts/SUPERVISOR.py` 생성:
 ```python
