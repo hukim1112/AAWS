@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 @dataclass
 class AgentContext:
+    agent_name: str = "unknown"
+    session_id: str = "unknown"
     logging_enabled: bool = False
     log_path: str = "./artifacts/agent_audit_trail.json"
     response_mode: str = "chat"
