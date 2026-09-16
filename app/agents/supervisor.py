@@ -1,80 +1,76 @@
 """
 ===============================================================================
-[AAWS Agent] Supervisor — 멀티에이전트 총괄 오케스트레이터
+[AAWS Mission 03] Supervisor — 멀티에이전트 총괄 오케스트레이터 (교육생 실습용)
 ===============================================================================
-Planning 도구로 계획을 수립하고, invoke_sub_agent로 전문 sub-agent(Scraper,
-Analyst 등)에게 작업을 위임하여 복잡한 멀티스텝 미션을 완수한다.
+본 파일은 Mission 03 실습 파일입니다.
+`notebooks/4_MultiAgent_Orchestration.ipynb` 및 `missions/03_missions.md`를 참고하여
+하위 전문 에이전트(Scraper 등)를 오케스트레이션하는 Supervisor 에이전트를 완성하세요.
 
-아키텍처:
-  👑 Supervisor (이 파일)
-   ├── Planning Tools: enter_plan, task_create, task_update, task_list, exit_plan
-   ├── Orchestration: invoke_sub_agent → POST /agents/{role}/invoke (AsyncAgentClient)
-   └── Common Tools: file_read, file_writer, file_edit, grep_search, glob_search, web_search
+[실습 단계 가이드]
+1. InvokeSubAgentInput (Pydantic 스키마 정의)
+   - task_instruction: str (하위 에이전트에게 내릴 명확한 지시문)
+   - target_file_list: List[str] (참조하거나 생성할 파일 경로 목록)
+   - subagent_role: str (하위 에이전트 역할 페르소나, 기본값: 'scraper')
+
+2. invoke_sub_agent (LangChain Tool 구현)
+   - create_scraper_executor()로 하위 에이전트 팩토리 호출
+   - Prompt Layering (Worker 전용 지침 주입 & [TASK REPORT] 5줄 요약 보고 강제)
+   - Dynamic Context Pruning (부모의 대화 기록 대신 task_instruction 및 target_file_list만 전달)
+   - scraper.ainvoke() 실행 후 결과 문자열 반환
+
+3. SUPERVISOR_SYSTEM_PROMPT (시스템 프롬프트 정의)
+   - Planning First (enter_plan, task_create로 계획 수립)
+   - Delegation via invoke_sub_agent (Scraper에게 데이터 수집 위임)
+   - Verification & Consolidation (결과 확인 후 exit_plan 호출 및 최종 종합)
+
+4. create_agent_executor (에이전트 팩토리 함수)
+   - LLM 초기화 (init_chat_model)
+   - AsyncSqliteSaver 체크포인터 설정
+   - 도구 바인딩 (계획 도구 5종 + invoke_sub_agent + 공용 파일 도구)
+   - create_agent()로 supervisor_agent 생성 및 반환
 ===============================================================================
 """
 
 import os
 import json
+import asyncio
+from typing import List
+from pydantic import BaseModel, Field
 import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+from langchain_core.tools import tool
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware
-from app.utils import init_chat_model
-from app.prompts import SUPERVISOR_SYSTEM_PROMPT
-from app.tools import tools_supervisor
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langchain_core.messages import HumanMessage
+
+from app.utils import init_chat_model, normalize_content
 from app.utils.context import AgentContext
+from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update
+from app.tools.common import file_read, file_writer, glob_search, grep_search
+from app.agents.scraper import create_agent_executor as create_scraper_executor
 
 AGENT_METADATA = {
     "name": "supervisor",
-    "description": "멀티에이전트 총괄 오케스트레이터 — 계획 수립 후 Scraper/Analyst 등 전문 에이전트에게 작업을 위임하고 결과를 종합하여 보고합니다.",
+    "description": "전체 기획/계획 수립 및 전문 하위 에이전트(Scraper 등)를 오케스트레이션하는 총괄 Supervisor"
 }
 
-
-def _load_config(path: str, default: dict) -> dict:
-    """설정 파일을 로드합니다. 실패 시 기본값을 반환합니다."""
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return default
+# =============================================================================
+# 1. invoke_sub_agent Pydantic 스키마 및 도구 정의
+# =============================================================================
+# TODO: missions/03_missions.md [2단계]를 참고하여
+#       InvokeSubAgentInput 스키마와 invoke_sub_agent 도구를 구현하세요.
 
 
-async def create_agent_executor():
-    # 1. LLM 설정
-    llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+# =============================================================================
+# 2. Supervisor 시스템 프롬프트 정의
+# =============================================================================
+# TODO: missions/03_missions.md [2단계]를 참고하여
+#       SUPERVISOR_SYSTEM_PROMPT를 정의하세요.
 
-    # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
-    db_dir = "app/database"
-    os.makedirs(db_dir, exist_ok=True)
-    checkpoints_path = os.path.join(db_dir, "checkpoints.db")
 
-    conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-    checkpointer = AsyncSqliteSaver(conn)
-    await checkpointer.setup()
-
-    # 3. HITL 미들웨어 동적 구성 (configs/hitl.config 기반)
-    hitl_cfg = _load_config("./configs/hitl.config", {"hitl_enabled": False})
-    middleware = []
-    if hitl_cfg.get("hitl_enabled"):
-        interrupt_on = hitl_cfg.get("interrupt_on", {})
-        if interrupt_on:
-            middleware.append(
-                HumanInTheLoopMiddleware(
-                    interrupt_on=interrupt_on,
-                    description_prefix="Supervisor 도구 실행 승인 요청",
-                )
-            )
-
-    # 4. Supervisor 에이전트 구축
-    #    tools_supervisor = Planning(5) + Orchestration(2) + Common(6) = 13종
-    supervisor_agent = create_agent(
-        model=llm,
-        tools=tools_supervisor,
-        system_prompt=SUPERVISOR_SYSTEM_PROMPT,
-        middleware=middleware,
-        checkpointer=checkpointer,
-        context_schema=AgentContext,
-    )
-    return supervisor_agent
+# =============================================================================
+# 3. Supervisor 에이전트 팩토리 함수
+# =============================================================================
+# TODO: missions/03_missions.md [2단계]를 참고하여
+#       async def create_agent_executor() 함수를 구현하세요.
+#       (create_agent_executor 함수가 정의되면 FastAPI 서버와 Chainlit UI에서 자동으로 감지됩니다.)
