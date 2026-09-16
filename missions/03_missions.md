@@ -28,14 +28,18 @@
 
 ### 1단계: `notebooks/4_MultiAgent_Orchestration.ipynb` 핵심 패턴 복습
 
-노트북 Part 4에서 다룬 **`invoke_sub_agent`의 3대 핵심 규약**을 확인하세요:
+노트북 Part 3~4에서 다룬 **멀티에이전트 협업 핵심 원칙**을 확인하세요:
 1. **`InvokeSubAgentInput` (Pydantic 스키마)**:
    - `task_instruction: str`: 구체적인 작업 지시문
    - `target_file_list: List[str]`: 하위 에이전트가 참조하거나 생성할 파일 목록
-   - `subagent_role: str`: 하위 에이전트의 역할 페르소나 (기본값 `"Web Scraper"`)
-2. **Dynamic Context Pruning (맥락 격리)**:
-   - 부모의 전체 대화 히스토리를 넘기지 않고 `prompt = f"Target File List: {target_file_list}\nInstruction: {task_instruction}"`만 주입
-3. **`[TASK REPORT]` 반환 프로토콜**:
+   - `subagent_role: str`: 하위 에이전트의 역할 페르소나 (기본값 `"scraper"`)
+2. **서브에이전트 프로토콜 오버레이 (3-Layer Protocol Overlay)**:
+   - 부모의 전체 대화 히스토리를 넘기지 않고, `[SUB-AGENT MODE - STRICT PROTOCOL]` 헤더와 함께 인계 파일 및 지시문만 `HumanMessage`로 격리 주입
+3. **원칙 중심 프롬프팅 (Principle-over-Micromanagement)**:
+   - 시스템 프롬프트에 도구 호출 절차(Call enter_plan 등)를 마이크로매니징하지 않고, **계획 수립 및 공유, 장애 자가 치유(Backtracking), 결과 중심 브리핑**이라는 상위 원칙만 주입
+4. **계획에 대한 단일 수정자 원칙 (Single Writer Principle)**:
+   - 하위 에이전트는 인계받은 계획을 읽어 맥락만 파악하고, 직접 계획표를 수정하지 않고 제안만 하도록 규약화
+5. **`[TASK REPORT]` 반환 프로토콜**:
    - 세부 수집 데이터는 디스크(`artifacts/data/`)에 파일로 저장하고, 부모에게는 **5줄 요약 포인터**만 반환
 
 ---
@@ -71,7 +75,7 @@ from app.agents.scraper import create_agent_executor as create_scraper_executor
 
 AGENT_METADATA = {
     "name": "supervisor",
-    "description": "전체 기획/계획 수립 및 전문 하위 에이전트(Scraper 등)를 오케스트레이션하는 총괄 Supervisor"
+    "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트"
 }
 
 # =============================================================================
@@ -107,23 +111,28 @@ async def invoke_sub_agent(task_instruction: str, target_file_list: List[str] = 
     """
     scraper = await create_scraper_executor()
     
-    file_list_str = ", ".join(target_file_list) if target_file_list else "지정 파일 없음"
+    file_list_str = ", ".join(target_file_list) if target_file_list else "None"
     
-    # Prompt Layering: Worker 전용 Fact-Only 지침 및 [TASK REPORT] 규격 강제
-    prompt = f"""Target File List: {file_list_str}
-Instruction: {task_instruction}
-
-[수행 지침]
-1. 사이트 DOM 구조를 분석하고 셀렉터를 검증하여 데이터 수집 코드를 작성/실행하세요.
-2. 수집된 결과 데이터는 반드시 지정된 JSON 경로({file_list_str})에 파일로 저장하세요.
-3. 작업 완료 후 부모 Supervisor에게 다음 5줄 요약 포맷으로만 보고하세요:
+    # 🌟 [3-Layer Architecture] 범용 Sub-Agent Protocol Overlay 주입
+    # (특정 도메인을 하드코딩하지 않고, 침묵 실행/계획 참조 및 단일 수정자 원칙/블로커/보고서 규약만 주입)
+    prompt = f"""[SUB-AGENT MODE - STRICT PROTOCOL]
+You are operating as a sub-agent under a Main Agent. You MUST follow these rules:
+1. NO greetings or conversational responses. Execute the task immediately.
+2. Context & Plan: If a plan is shared, refer to it to understand the broader context.
+   Do NOT modify the plan yourself. If adjustments are needed, propose them in your report.
+3. On ANY blocker (site blocked / selector failure / access denied):
+   STOP immediately and return EXACTLY:
+   [BLOCKER: <concise reason>]
+4. On success: write all detailed results to disk first, then return EXACTLY:
    [TASK REPORT]
-   - Status: SUCCESS | FAILED | BLOCKER
+   - Status: SUCCESS
    - Target Files: {file_list_str}
-   - Artifacts Created: 저장한 파일 경로
-   - Summary: (수집 건수 및 핵심 요약 1~2줄)
-   - Issues: None (또는 발생한 에러/이슈)
-"""
+   - Artifacts Created: <created file paths>
+   - Summary: <1-2 sentence core finding>
+   - Issues: None (or proposed plan adjustments)
+══════════════════════════════════════════════════════════
+Target Files: {file_list_str}
+Instruction: {task_instruction}"""
     
     config = {"configurable": {"thread_id": f"sub_{int(asyncio.get_event_loop().time() * 1000)}"}}
     response = await scraper.ainvoke(
@@ -135,28 +144,36 @@ Instruction: {task_instruction}
 
 
 # =============================================================================
-# 2. Supervisor 시스템 프롬프트 정의
+# 2. Supervisor 시스템 프롬프트 정의 (원칙 중심 프롬프팅: Principle-over-Micromanagement)
 # =============================================================================
 
-SUPERVISOR_SYSTEM_PROMPT = """
-당신은 최고 수준의 프로젝트 오케스트레이터이자 총괄 관리자(Supervisor Agent)입니다.
-당신의 임무는 사용자의 복잡한 요구사항을 분석하여 세부 계획을 수립하고, 전문 하위 에이전트(Worker)에게 작업을 위임하여 최종 목표를 완수하는 것입니다.
+SUPERVISOR_SYSTEM_PROMPT = """당신은 사용자의 요청을 편안하게 도와드리는 유능한 AI 어시스턴트입니다.
+질문에 답하고, 정보를 검색하고, 코드를 작성하고, 파일을 다루는 등 다양한 범용 작업을 직접 수행합니다.
+필요한 경우에는 전문 에이전트를 활용하여 웹 데이터 수집 같은 복잡한 작업도 해결합니다.
 
 ═══════════════════════════════════════════════════════════════
-[오케스트레이션 4대 행동 수칙]
+[작업 원칙]
 ═══════════════════════════════════════════════════════════════
 
-1. **계획 수립 (Planning First)**
-   - 복잡한 작업(웹 스크래핑, 다단계 분석 등)을 요청받으면 가장 먼저 `enter_plan` 및 `task_create`로 체계적인 작업 계획을 수립하세요.
-   - 각 단계가 완료될 때마다 `task_update`로 상태를 `COMPLETED`로 변경하세요.
+1. **작업 규모에 맞게 처리하기**:
+   - 간단한 질의나 즉시 처리가 가능한 작업은 곧바로 수행하세요.
+   - 여러 단계가 필요한 복잡한 작업은 계획을 먼저 세우고 수행하세요.
+   - 전문가에게 작업을 위임할 때는 수립한 계획도 함께 공유하여 전체 맥락을 파악하고 일할 수 있게 하세요.
 
-2. **전문 에이전트 위임 (Delegation via invoke_sub_agent)**
-   - 웹사이트 탐색이나 데이터 수집 작업이 필요하면 직접 코드를 짜지 말고, `invoke_sub_agent` 도구를 호출하여 전문 Worker(`subagent_role="Web Scraper"`)에게 작업을 위임하세요.
-   - `target_file_list`에 저장할 파일 경로(`artifacts/data/파일명.json`)를 명시하고, `task_instruction`에 대상 URL 및 수집할 필드를 명확히 지시하세요.
+2. **전문가 활용하기**:
+   - 웹 데이터 수집, 스크래핑 등 전문 작업은 `invoke_sub_agent` 도구를 통해 전문 에이전트에게 위임하세요.
+   - 상세 위임 절차 및 파라미터는 `invoke_sub_agent` 도구의 설명을 참고하세요.
 
-3. **결과 검증 및 통합 (Verification & Consolidation)**
-   - 하위 에이전트가 `[TASK REPORT]`를 반환하면, 필요 시 `file_read`로 수집된 결과 파일의 상위 일부를 확인하여 데이터 정합성을 검증하세요.
-   - 모든 태스크가 완료되면 `exit_plan`을 호출하고, 사용자에게 최종 종합 보고서를 깔끔하게 요약하여 전달하세요.
+3. **실패해도 멈추지 않기**:
+   - 위임한 작업이 막히거나 장애([BLOCKER])가 발생하더라도 포기하지 마세요.
+   - 원인을 파악하고 대안 경로를 찾아 끝까지 완수하세요.
+
+═══════════════════════════════════════════════════════════════
+[답변 방식]
+═══════════════════════════════════════════════════════════════
+
+- 친근하고 명확한 어조로 답변하며, 불필요한 장황한 설명보다는 결과 중심으로 답변하세요.
+- 수집된 데이터나 상세 산출물은 파일(artifacts/)로 저장하고, 사용자에게는 핵심 요약과 파일 경로를 깔끔하게 전달하세요.
 """
 
 
@@ -222,21 +239,20 @@ http://quotes.toscrape.com 사이트에서 1~2페이지의 명언(text, author, 
 ```
 
 #### 🧪 실행 궤적(Trajectory) 관찰 포인트:
-1. **Supervisor의 계획 수립**: `enter_plan` 및 `task_create` 호출 (작업 칠판 초기화)
-2. **하위 Scraper 위임**: `invoke_sub_agent(task_instruction=..., target_file_list=['artifacts/data/quotes_multiagent.json'], subagent_role='Web Scraper')` 호출
+1. **Supervisor의 자율적 계획 수립**: 작업 규모를 판단하여 Task Board에 계획 및 세부 태스크 등록
+2. **하위 Scraper 위임**: 수립한 계획 및 타겟 파일(`target_file_list=['artifacts/data/quotes_multiagent.json']`)과 함께 `invoke_sub_agent` 호출 (맥락 인계)
 3. **Scraper의 독립 실행**:
-   - `extract_dom_skeleton` / `verify_selectors`로 DOM 탐색
-   - `file_writer`로 수집 스크립트 작성
-   - `bash_command`로 스크립트 실행 및 JSON 파일 생성
-   - `[TASK REPORT]` 반환
+   - 인계받은 계획을 참조하여 DOM 탐색 (`extract_dom_skeleton` / `verify_selectors`)
+   - `file_writer`로 수집 스크립트 작성 및 `bash_command`로 실행하여 JSON 파일 생성
+   - 직접 계획표를 수정하지 않고 규격화된 `[TASK REPORT]`로 결과 보고
 4. **Supervisor의 태스크 완료 및 최종 보고**:
    - `task_update` (`COMPLETED`) ➔ `exit_plan` ➔ 사용자에게 깔끔한 수집 통계 및 샘플 보고 완료!
 
 ---
 
 ## ✅ 성공 검증 체크리스트
-- [ ] `notebooks/4_MultiAgent_Orchestration.ipynb`를 확인하고 `invoke_sub_agent`의 3대 규약을 이해했는가?
-- [ ] `app/agents/supervisor.py`에 `InvokeSubAgentInput` 스키마와 `invoke_sub_agent` 도구가 정확히 정의되었는가?
+- [ ] `notebooks/4_MultiAgent_Orchestration.ipynb`를 확인하고 원칙 중심 프롬프팅 및 `invoke_sub_agent` 규약을 이해했는가?
+- [ ] `app/agents/supervisor.py`에 원칙 중심의 `SUPERVISOR_SYSTEM_PROMPT`와 `invoke_sub_agent` 도구가 정확히 구현되었는가?
 - [ ] Chainlit UI에서 `supervisor` 프로필이 정상적으로 나타나고 선택 가능한가?
 - [ ] Supervisor가 `invoke_sub_agent`로 Scraper에게 작업을 위임하여 실제 `artifacts/data/quotes_multiagent.json` 파일이 생성되었는가?
 - [ ] 전체 멀티에이전트 실행 루프가 에러 없이 성공적으로 마무리되었는가?
