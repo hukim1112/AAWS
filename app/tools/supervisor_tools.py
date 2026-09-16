@@ -43,18 +43,20 @@ _CALLER_AGENT_NAME = "supervisor"
 
 _FULL_PROTOCOL_HEADER = """\
 [SUB-AGENT MODE - STRICT PROTOCOL]
-You are operating as a sub-agent under a Supervisor. You MUST follow these rules:
+You are operating as a sub-agent under a Main Agent. You MUST follow these rules:
 1. NO greetings or conversational responses. Execute the task immediately.
-2. On ANY blocker (corrupted file / site blocked / selector failure / access denied):
+2. Context & Plan: If a plan is shared, refer to it to understand the broader context and prior outputs.
+   Do NOT modify the plan yourself. If adjustments are needed, propose them in your report.
+3. On ANY blocker (corrupted file / site blocked / selector failure / access denied):
    STOP immediately and return EXACTLY:
    [BLOCKER: <concise reason>]
-3. On success: write all results to disk first, then return EXACTLY:
+4. On success: write all results to disk first, then return EXACTLY:
    [TASK REPORT]
    - Status: SUCCESS
    - Target Files: <comma-separated file paths>
    - Artifacts Created: <created file paths>
    - Summary: <1-2 sentence core finding>
-   - Issues: None
+   - Issues: None (or proposed plan adjustments)
 ══════════════════════════════════════════════════════════"""
 
 _PROTOCOL_REMINDER = """\
