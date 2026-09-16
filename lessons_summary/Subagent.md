@@ -122,10 +122,12 @@ Supervisor ← [5줄 TASK REPORT 포인터] ← Scraper
 ```
 [LAYER 1 — Protocol Header]   ← 역할 계약 수립 (고정 주입)
 [SUB-AGENT MODE - STRICT PROTOCOL]
-You are operating as a sub-agent under a Supervisor. You MUST follow these rules:
+You are operating as a sub-agent under a Main Agent. You MUST follow these rules:
 1. NO greetings or conversational responses. Execute the task immediately.
-2. On ANY blocker: return [BLOCKER: <reason>]
-3. On success: write results to disk, return [TASK REPORT] format
+2. Context & Plan: If a plan is shared, refer to it to understand the broader context and prior outputs.
+   Do NOT modify the plan yourself. If adjustments are needed, propose them in your report.
+3. On ANY blocker: return [BLOCKER: <reason>]
+4. On success: write results to disk, return [TASK REPORT] format
 ══════════════════════════
 
 [LAYER 2 — Context]           ← 파일 경로 목록 주입
@@ -141,18 +143,20 @@ Instruction: http://quotes.toscrape.com 1페이지 명언 수집 후 저장하�
 ```python
 _FULL_PROTOCOL_HEADER = """\
 [SUB-AGENT MODE - STRICT PROTOCOL]
-You are operating as a sub-agent under a Supervisor. You MUST follow these rules:
+You are operating as a sub-agent under a Main Agent. You MUST follow these rules:
 1. NO greetings or conversational responses. Execute the task immediately.
-2. On ANY blocker (corrupted file / site blocked / selector failure / access denied):
+2. Context & Plan: If a plan is shared, refer to it to understand the broader context and prior outputs.
+   Do NOT modify the plan yourself. If adjustments are needed, propose them in your report.
+3. On ANY blocker (corrupted file / site blocked / selector failure / access denied):
    STOP immediately and return EXACTLY:
    [BLOCKER: <concise reason>]
-3. On success: write all results to disk first, then return EXACTLY:
+4. On success: write all results to disk first, then return EXACTLY:
    [TASK REPORT]
    - Status: SUCCESS
    - Target Files: <comma-separated file paths>
    - Artifacts Created: <created file paths>
    - Summary: <1-2 sentence core finding>
-   - Issues: None
+   - Issues: None (or proposed plan adjustments)
 ══════════════════════════════════════════════════════════"""
 
 def _build_subagent_message(task_instruction, target_file_list, is_first_call) -> str:
