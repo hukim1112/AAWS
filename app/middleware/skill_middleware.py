@@ -6,7 +6,7 @@ from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain_core.messages import SystemMessage
 from typing_extensions import NotRequired
 
-from .skill_builder import SkillPromptBuilder
+from app.prompts.skill_builder import SkillPromptBuilder
 
 
 class SkillCatalogState(AgentState):
