@@ -1,10 +1,8 @@
 import os
-import json
 from datetime import date
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.utils import init_chat_model
 from app.tools import tools_chatbot
 from app.utils.context import AgentContext
@@ -23,15 +21,6 @@ CHATBOT_SYSTEM_PROMPT = f"""당신은 귀엽고 친밀한 고양이 페르소나
 오늘의 날짜 : {date.today().strftime("%Y-%m-%d")}
 """
 
-def _load_config(path: str, default: dict) -> dict:
-    """설정 파일을 로드합니다. 실패 시 기본값을 반환합니다."""
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return default
 
 async def create_agent_executor():
     # 1. 일원화된 utils의 Universal Chat Model Factory를 활용하여 Gemini 3.8 Flash 모델 초기화
@@ -46,18 +35,8 @@ async def create_agent_executor():
     checkpointer = AsyncSqliteSaver(conn)
     await checkpointer.setup()
     
-    # 3. HITL 미들웨어 동적 구성 (configs/hitl.config 기반)
-    hitl_cfg = _load_config("./configs/hitl.config", {"hitl_enabled": False})
+    # 3. 미들웨어 파이프라인
     middleware = []
-    if hitl_cfg.get("hitl_enabled"):
-        interrupt_on = hitl_cfg.get("interrupt_on", {})
-        if interrupt_on:
-            middleware.append(
-                HumanInTheLoopMiddleware(
-                    interrupt_on=interrupt_on,
-                    description_prefix="도구 실행 승인 요청"
-                )
-            )
     
     # 4. 범용 8대 도구가 탑재된 스마트 챗봇 에이전트 구축
     chatbot_agent = create_agent(

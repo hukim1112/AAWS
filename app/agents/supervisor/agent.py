@@ -6,11 +6,9 @@ Supervisor 에이전트 인스턴스를 조립하고 반환하는 팩토리 모�
 """
 
 import os
-import json
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware
 
 from app.utils import init_chat_model
 from app.utils.context import AgentContext
@@ -21,16 +19,6 @@ AGENT_METADATA = {
     "name": "supervisor",
     "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트"
 }
-
-def _load_config(path: str, default: dict) -> dict:
-    """설정 파일을 로드합니다. 실패 시 기본값을 반환합니다."""
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return default
 
 # =============================================================================
 # Supervisor 에이전트 팩토리 함수 (Mission 03 & 04)
