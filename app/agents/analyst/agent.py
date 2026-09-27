@@ -20,10 +20,11 @@ import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
+from app.prompts.skill_middleware import SkillCatalogMiddleware
 from app.utils import init_chat_model
 from app.utils.context import AgentContext
 
-from .prompt import ANALYST_SYSTEM_PROMPT
+from .prompt import BASE_ANALYST_SYSTEM_PROMPT, get_skill_prompt_builder
 from .tools import tools_analyst
 
 AGENT_METADATA = {
@@ -58,7 +59,7 @@ async def create_agent_executor():
 
     # 3. HITL 미들웨어 동적 구성 (configs/hitl.config 기반)
     hitl_cfg = _load_config("./configs/hitl.config", {"hitl_enabled": False})
-    middleware = []
+    middleware = [SkillCatalogMiddleware(get_skill_prompt_builder())]
     if hitl_cfg.get("hitl_enabled"):
         interrupt_on = hitl_cfg.get("interrupt_on", {})
         if interrupt_on:
@@ -73,7 +74,7 @@ async def create_agent_executor():
     analyst_agent = create_agent(
         model=llm,
         tools=tools_analyst,
-        system_prompt=ANALYST_SYSTEM_PROMPT,
+        system_prompt=BASE_ANALYST_SYSTEM_PROMPT,
         middleware=middleware,
         checkpointer=checkpointer,
         context_schema=AgentContext,

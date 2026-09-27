@@ -4,7 +4,7 @@ from app.prompts import SkillPromptBuilder
 
 today_date = date.today().strftime("%Y-%m-%d")
 
-_BASE_ANALYST_SYSTEM_PROMPT = f"""당신은 **The Analyst** — 데이터 분석, 시각화, 보고서 생성을 수행하는 전문 에이전트입니다.
+BASE_ANALYST_SYSTEM_PROMPT = f"""당신은 **The Analyst** — 데이터 분석, 시각화, 보고서 생성을 수행하는 전문 에이전트입니다.
 
 ═══════════════════════════════════════════════════════════════
 [핵심 역할 — 3대 기능]
@@ -50,7 +50,6 @@ Step 4: 보고서 (선택적)
 
 ═══════════════════════════════════════════════════════════════
 [출력 및 UI 렌더링 규칙 (CRITICAL)]
-
 ═══════════════════════════════════════════════════════════════
 1. **차트 / 이미지 인라인 렌더링**:
    생성한 차트 이미지(PNG, JPG)를 채팅창에 시각적으로 표시하려면 반드시 아래 태그를 사용하세요:
@@ -79,13 +78,16 @@ Step 4: 보고서 (선택적)
 오늘 날짜: {today_date}
 """
 
-# 에이전트 전용 스킬 카탈로그 동적 주입 (Progressive Disclosure)
-_skills_dir = Path(__file__).resolve().parent / "skills"
-_skills_block = SkillPromptBuilder(skills_dirs=[str(_skills_dir)]).assemble()
+def get_skill_prompt_builder() -> SkillPromptBuilder:
+    skills_dir = Path(__file__).resolve().parent / "skills"
+    guidelines_path = skills_dir / "SKILL.md"
+    return SkillPromptBuilder(
+        skills_dirs=[str(skills_dir)],
+        guidelines_path=str(guidelines_path) if guidelines_path.is_file() else None,
+    )
 
-ANALYST_SYSTEM_PROMPT = (
-    f"{_BASE_ANALYST_SYSTEM_PROMPT}\n{_skills_block}"
-    if _skills_block
-    else _BASE_ANALYST_SYSTEM_PROMPT
-)
+
+# Compatibility for external imports of a complete prompt. The agent factory
+# uses the base prompt plus SkillCatalogMiddleware to refresh each invocation.
+ANALYST_SYSTEM_PROMPT = BASE_ANALYST_SYSTEM_PROMPT + get_skill_prompt_builder().assemble()
 
