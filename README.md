@@ -1,7 +1,6 @@
 # 🕷️ AAWS — AI Agent Web Scraper
 
-> **AI가 웹을 읽고, 설계하고, 수집한다.**  
-> LLM 에이전트 구축부터 브라우저 자동화, 멀티에이전트 협업 및 자동 평가까지 — 실전 프로덕션 AI 에이전트 핸즈온
+> **LLM 에이전트 기초부터 브라우저 자동화, 멀티에이전트 협업 및 자동 벤치마크 평가까지** 다루는 실전 AI 에이전트 핸즈온 프로젝트
 
 ---
 
@@ -27,11 +26,9 @@
 
 **AAWS (AI Agent Web Scraper)** 는 LLM 기반 에이전트가 웹 탐색·분석·데이터 수집을 자율적으로 수행하는 시스템을 설계하고 구현하는 핸즈온 프로젝트입니다.
 
-전통적인 크롤링은 개발자가 직접 HTML 구조를 분석하고, 셀렉터를 찾고, 코드를 작성해야 합니다. 사이트 구조가 바뀌면 모든 코드를 처음부터 다시 고쳐야 하죠. AAWS는 이 과정을 지능형 AI 에이전트들에게 전적으로 위임합니다.
+기존 웹 크롤링은 개발자가 사이트의 HTML 구조와 셀렉터를 일일이 분석해 코드를 작성해야 하며, 웹페이지 구조가 변경되면 스크립트를 매번 다시 작성해야 하는 한계가 있습니다. AAWS는 AI 에이전트가 웹페이지를 자율적으로 탐색하고, 셀렉터를 검증하며, 데이터 수집 파이프라인 코드를 스스로 작성·실행하도록 구성합니다.
 
 본 프로젝트에서 교육생은 **4개의 핸즈온 노트북**으로 에이전트의 핵심 원리를 학습한 뒤, **5개의 실습 미션**을 통해 프로덕션 수준의 에이전트 시스템을 직접 조립·고도화하고, **9개 난이도별 시나리오 자동 평가**로 성능을 객관적으로 검증합니다.
-
-> *"AI 에이전트들이 복잡한 웹 환경에서 어떻게 상호작용하고, 스스로의 오류를 정정하며 완결된 결과물을 만들어 낼 수 있을까?"*
 
 ---
 
@@ -139,29 +136,28 @@ missions/
 
 ## 📂 프로젝트 구조
 
-학습 코드(Jupyter Notebook), 프로덕션 에이전트 서빙 코드(FastAPI + Chainlit), 자동 평가 프레임워크(evaluate)가 단일 저장소로 통합된 **모노레포 아키텍처**입니다.
+핸즈온 노트북(학습), FastAPI 및 Chainlit(서빙), 시나리오 벤치마크(평가)가 유기적으로 연계된 **올인원(All-in-One) 통합 프로젝트 구조**입니다.
 
 ```
 AAWS/
 ├── notebooks/              # 📗 핸즈온 실습 노트북 (1~4)
 ├── missions/               # 🎯 실습 미션 가이드 (01~05)
-├── lessons_summary/        # 📚 실전 에이전트 아키텍처 & 설계 패턴 교훈 바이블
+├── lessons_summary/        # 📚 에이전트 설계 원칙 및 아키텍처 핵심 요약
 │   ├── 01_Agent_Engineering_Principles.md # 도구 설계(Curated View), Prompt-as-Code, EDD 평가 하네스
 │   ├── 02_Subagent.md                     # Dynamic Context Pruning, Blackboard 패턴, Sub-Agent Protocol
 │   └── 03_Long_running_agent.md           # Event-Driven Reactive Wakeup & 비동기 롱러닝 아키텍처
 ├── app/                    # 🧠 에이전트 시스템 코어 패키지
-│   ├── agents/             #   ├── 에이전트 팩토리 (chatbot, scraper, supervisor, analyst)
-│   ├── tools/              #   ├── 에이전트 도구 모음
-│   │   ├── common.py       #   │   ├── 범용 코딩/파일/검색 도구 10종
-│   │   ├── navigator.py    #   │   ├── Playwright 웹 탐색 도구 6종 + PlaywrightManager
-│   │   ├── plan.py         #   │   ├── Supervisor 계획 도구 5종
-│   │   ├── supervisor_tools.py #   │├── 서브에이전트 오케스트레이션 도구
-│   │   └── analyst.py      #   │   └── 데이터 분석 도구 6종
-│   ├── prompts/            #   ├── 에이전트별 시스템 프롬프트 (CHATBOT, SCRAPER, SUPERVISOR, ANALYST)
+│   ├── agents/             #   ├── 독립 패키지형 에이전트 모듈 (agent.py, prompt.py, tools.py)
+│   │   ├── chatbot.py      #   │   ├── 대화형 챗봇 (기억 도구 연동)
+│   │   ├── scraper/        #   │   ├── 웹 스크래퍼 패키지 (브라우저 탐색/코드작성/자가치유)
+│   │   ├── supervisor/     #   │   ├── 총괄 오케스트레이터 패키지 (계획 수립 & 서브에이전트 비동기 위임)
+│   │   └── analyst/        #   │   └── [Capstone] 데이터 분석·시각화 전문 에이전트 패키지
+│   ├── tools/              #   ├── 에이전트 공용 도구 모음 (common, navigator, plan, supervisor_tools)
+│   ├── prompts/            #   ├── 공통 프롬프트 템플릿 및 동적 스킬 빌더 (skill_builder.py)
 │   ├── database/           #   ├── 사용자 기억(USER.md), 대화 DB
 │   ├── middleware/         #   ├── HITL 미들웨어
 │   ├── utils/              #   ├── LLM 초기화, 메시지 유틸, DB 레이어
-│   ├── server.py           #   ├── FastAPI 에이전트 API 서버
+│   ├── server.py           #   ├── FastAPI 에이전트 API 서버 (동적 에이전트 로더)
 │   ├── chainlit_ui.py      #   ├── Chainlit 채팅 프론트엔드
 │   ├── streamlit_ui.py     #   ├── Streamlit 채팅 프론트엔드
 │   └── client.py           #   └── 터미널 테스트 CLI 클라이언트
@@ -187,7 +183,7 @@ AAWS/
 
 ## ▶️ 실시간 서빙 및 채팅 UI 가동 가이드
 
-노트북 학습이 완료되면, 에이전트 팀을 실제 웹 채팅 UI로 구동합니다. **터미널 2개**를 열어 백엔드와 프론트엔드를 각각 실행하세요.
+노트북 학습과 미션을 마친 후, 구축한 **멀티에이전트 시스템을** 웹 채팅 UI로 실행할 수 있습니다. **터미널 2개**를 열어 백엔드와 프론트엔드를 각각 실행하세요.
 
 ### 1. 백엔드 서버 (FastAPI) 가동 — 터미널 ①
 ```bash
@@ -236,15 +232,15 @@ python -m evaluate.run_scraper_scenarios
 ### 채점 기준
 
 * **Schema Score (100점)**: 수집 데이터의 형식 정합성, 속성 매칭도, 결측치 비율
-* **Strategy Score (100점)**: 에이전트 동작 경로의 지능성, 토큰 효율성, 최적 도구 선택
+* **Strategy Score (100점)**: 최적 도구 선택, 탐색 경로의 합목적성, 대기/예외 처리 및 토큰 효율성
 
 평가 결과는 `artifacts/runs/[실험ID]/` 폴더에 실험별로 격리 저장됩니다.
 
 ---
 
-## 🔒 향후 연구과제: Anti-Bot 대응
+## 🔒 [참고] 실전 웹 스크래핑과 Anti-Bot 대응 전략
 
-이번 핸즈온에서는 **공개된 연습용 사이트**를 대상으로 실습하므로 Anti-Bot 방어 우회 기법은 의도적으로 다루지 않았습니다.
+본 핸즈온은 에이전트의 자율 문제 해결과 오케스트레이션 메커니즘 학습에 집중하기 위해 공개 연습용 웹사이트를 대상으로 구성되었습니다. 실제 서비스 환경 크롤링 시 고려해야 할 주요 방어 기법과 엔지니어링 대응 방안은 다음과 같습니다:
 
 ### 주요 Anti-Bot 기법과 대응 방향
 
