@@ -12,7 +12,7 @@
 | 구분 | v1.0 (Legacy) | v2.0 (Current) |
 | :--- | :--- | :--- |
 | **웹 UI 프론트엔드** | Streamlit (`app/ui.py`) | **Chainlit (`app/chainlit_ui.py`, 포트 `8080`)** |
-| **에이전트 구성** | Navigator / Coder 분리 구조 | **Scraper 단일 전문 에이전트로 통합** |
+| **서브 에이전트 구성** | Navigator / Coder 분리 구조 | **Scraper 단일 전문 에이전트로 통합** |
 | **Supervisor 패턴** | 단순 메시지 라우팅 방식 | **Blackboard 패턴 (Planning 문서 공유로 정보격차 해소)** |
 | **브라우저 제어** | 개별 Playwright 인스턴스 | **`PlaywrightManager` CDP 공유 싱글턴 (세션/쿠키 유지)** |
 | **비동기 오케스트레이션** | 동기식 인프로세스 차단 | **이벤트 기반 Reactive Wakeup & 백그라운드 작업 큐** |
