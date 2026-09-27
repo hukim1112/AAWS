@@ -15,11 +15,9 @@
 """
 
 import os
-import json
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.prompts.skill_middleware import SkillCatalogMiddleware
 from app.utils import init_chat_model
 from app.utils.context import AgentContext
@@ -31,17 +29,6 @@ AGENT_METADATA = {
     "name": "analyst",
     "description": "데이터 분석·시각화·보고서 전문 에이전트 — 데이터 프로파일링, 차트 생성, Excel/HTML 보고서를 생성합니다.",
 }
-
-
-def _load_config(path: str, default: dict) -> dict:
-    """설정 파일을 로드합니다. 실패 시 기본값을 반환합니다."""
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return default
 
 
 async def create_agent_executor():
@@ -57,18 +44,8 @@ async def create_agent_executor():
     checkpointer = AsyncSqliteSaver(conn)
     await checkpointer.setup()
 
-    # 3. HITL 미들웨어 동적 구성 (configs/hitl.config 기반)
-    hitl_cfg = _load_config("./configs/hitl.config", {"hitl_enabled": False})
+    # 3. 미들웨어 구성 (SkillCatalogMiddleware: 스킬 카탈로그 동적 주입)
     middleware = [SkillCatalogMiddleware(get_skill_prompt_builder())]
-    if hitl_cfg.get("hitl_enabled"):
-        interrupt_on = hitl_cfg.get("interrupt_on", {})
-        if interrupt_on:
-            middleware.append(
-                HumanInTheLoopMiddleware(
-                    interrupt_on=interrupt_on,
-                    description_prefix="Analyst 도구 실행 승인 요청",
-                )
-            )
 
     # 4. Analyst 에이전트 구축
     analyst_agent = create_agent(

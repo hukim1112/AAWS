@@ -14,11 +14,9 @@ Analyst 등)에게 작업을 위임하여 복잡한 멀티스텝 미션을 완�
 """
 
 import os
-import json
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.utils import init_chat_model
 from app.utils.context import AgentContext
 
@@ -29,17 +27,6 @@ AGENT_METADATA = {
     "name": "supervisor",
     "description": "멀티에이전트 총괄 오케스트레이터 — 계획 수립 후 Scraper/Analyst 등 전문 에이전트에게 작업을 위임하고 결과를 종합하여 보고합니다.",
 }
-
-
-def _load_config(path: str, default: dict) -> dict:
-    """설정 파일을 로드합니다. 실패 시 기본값을 반환합니다."""
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return default
 
 
 async def create_agent_executor():
@@ -55,18 +42,8 @@ async def create_agent_executor():
     checkpointer = AsyncSqliteSaver(conn)
     await checkpointer.setup()
 
-    # 3. HITL 미들웨어 동적 구성 (configs/hitl.config 기반)
-    hitl_cfg = _load_config("./configs/hitl.config", {"hitl_enabled": False})
+    # 3. 미들웨어 파이프라인
     middleware = []
-    if hitl_cfg.get("hitl_enabled"):
-        interrupt_on = hitl_cfg.get("interrupt_on", {})
-        if interrupt_on:
-            middleware.append(
-                HumanInTheLoopMiddleware(
-                    interrupt_on=interrupt_on,
-                    description_prefix="Supervisor 도구 실행 승인 요청",
-                )
-            )
 
     # 4. Supervisor 에이전트 구축
     #    tools_supervisor = Planning(5) + Orchestration(3) + Common(6) = 14종
