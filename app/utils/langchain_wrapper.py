@@ -22,7 +22,7 @@ load_dotenv()
 
 
 def init_chat_model(
-    model: str = "gemini-3.7-flash",
+    model: str = "gemini-3.8-flash",
     model_provider: Optional[str] = None,
     temperature: float = 0.0,
     **kwargs: Any
@@ -33,7 +33,7 @@ def init_chat_model(
     google_genai(2순위)를 자동으로 라우팅합니다.
 
     Args:
-        model: 모델 식별자 (예: 'gpt-4o', 'claude-3-5-sonnet', 'gemini-2.5-flash', 'gemini-3.7-flash')
+        model: 모델 식별자 (예: 'gpt-4o', 'claude-3-5-sonnet', 'gemini-2.5-flash', 'gemini-3.8-flash')
         model_provider: 명시적 공급자 ('openai', 'anthropic', 'google_vertexai', 'google_genai' 등). 생략 시 자동 감지.
         temperature: 샘플링 온도 (기본값: 0.0)
         **kwargs: 공급자별 추가 파라미터 (max_tokens, streaming, project, location 등)

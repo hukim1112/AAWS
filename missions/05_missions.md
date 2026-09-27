@@ -79,7 +79,7 @@ WORKER_SYSTEM_PROMPT = """
 
 # 2. 에이전트 팩토리 함수 (이 함수가 있어야 서버가 자동 로드합니다)
 async def create_agent_executor():
-    llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+    llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
     
     # 에이전트에게 필요한 도구 목록 선택
     tools = [file_read, file_writer, bash_command, glob_search]

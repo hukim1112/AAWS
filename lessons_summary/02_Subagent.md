@@ -449,7 +449,7 @@ except Exception as e:
 
 ## 부록: 실험 결과 Walkthrough
 
-**환경**: AAWS v2.0, LangChain 1.3.15, `gemini-3.7-flash`  
+**환경**: AAWS v2.0, LangChain 1.3.15, `gemini-3.8-flash`  
 **Supervisor thread_id**: `test_session_supervisor_v2`  
 **Scraper sub-thread_id**: `test_session_supervisor_v2_scraper`
 

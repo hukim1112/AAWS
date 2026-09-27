@@ -44,8 +44,8 @@ def _load_config(path: str, default: dict) -> dict:
 
 
 async def create_agent_executor():
-    # 1. LLM 설정 — Universal Chat Model Factory 기반 gemini-3.7-flash 사용
-    llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+    # 1. LLM 설정 — Universal Chat Model Factory 기반 gemini-3.8-flash 사용
+    llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
 
     # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
     db_dir = "app/database"

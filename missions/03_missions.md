@@ -225,7 +225,7 @@ AGENT_METADATA = {
 
 async def create_agent_executor():
     # 1. LLM 초기화
-    llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+    llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
     
     # 2. AsyncSqliteSaver 체크포인터 설정
     db_dir = "app/database"

@@ -57,7 +57,7 @@ async def evaluate_scenario_result(
         schema_feedback_msg = f"결과 파일이 존재하지 않음: {json_output_path}"
 
     # 2. Strategy Validation (LLM-as-a-Judge)
-    eval_model = init_chat_model("gemini-3.7-flash", temperature=0.0)
+    eval_model = init_chat_model("gemini-3.8-flash", temperature=0.0)
     structured_evaluator = eval_model.with_structured_output(EvaluationFeedback)
     
     prompt_template = ChatPromptTemplate.from_messages([
