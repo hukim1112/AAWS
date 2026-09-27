@@ -10,7 +10,7 @@ This skill package provides specialized, on-demand troubleshooting playbooks for
 
 ## Skill Structure & Progressive Disclosure
 
-When encountering obstacles during the 6-step workflow, inspect and read the relevant playbook on demand:
+Choose a playbook when the task requirements or observed page behavior match its scope. Read its entrypoint before applying it:
 
 | Obstacle / Trigger Signal | Guide File | Key Strategies & Patterns |
 |---|---|---|
@@ -19,5 +19,6 @@ When encountering obstacles during the 6-step workflow, inspect and read the rel
 | **Obfuscated DOM / Next.js SSR / Hidden JSON API** | `app/agents/scraper/skills/api_reverse_engineering.md` | Pre-flight `__NEXT_DATA__` extraction, Playwright network request sniffing (XHR/Fetch), high-speed direct API collection |
 
 ## Operating Principles
-1. **Baseline First**: Always start with the lightweight 6-step pipeline (skeleton → section analysis → selector verification) defined in the system prompt.
-2. **Signal-Driven Invocation**: Only consult these skill playbooks when concrete failure signals arise (e.g., selector count == 0, HTTP 403/429, obfuscated class names).
+1. **Evidence-Based Selection**: Use the default DOM workflow when appropriate. API or embedded-data playbooks may replace DOM analysis when observations support that strategy.
+2. **Progressive Loading**: Read relevant playbooks and their required references only. New skills are listed in the catalog automatically; this table is not an exhaustive registry.
+3. **Bounded Recovery**: Apply a relevant skill to recoverable failures within the task budget. Report missing authorization, required human intervention, or exhausted recovery attempts to the supervisor.

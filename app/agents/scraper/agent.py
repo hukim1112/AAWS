@@ -23,7 +23,8 @@ from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.utils import init_chat_model
 from app.utils.context import AgentContext
 
-from .prompt import SCRAPER_SYSTEM_PROMPT
+from app.prompts.skill_middleware import SkillCatalogMiddleware
+from .prompt import BASE_SCRAPER_SYSTEM_PROMPT, get_skill_prompt_builder
 from .tools import tools_scraper
 
 AGENT_METADATA = {
@@ -58,7 +59,7 @@ async def create_agent_executor():
 
     # 3. HITL 미들웨어 동적 구성 (configs/hitl.config 기반)
     hitl_cfg = _load_config("./configs/hitl.config", {"hitl_enabled": False})
-    middleware = []
+    middleware = [SkillCatalogMiddleware(get_skill_prompt_builder())]
     if hitl_cfg.get("hitl_enabled"):
         interrupt_on = hitl_cfg.get("interrupt_on", {})
         if interrupt_on:
@@ -73,7 +74,7 @@ async def create_agent_executor():
     scraper_agent = create_agent(
         model=llm,
         tools=tools_scraper,
-        system_prompt=SCRAPER_SYSTEM_PROMPT,
+        system_prompt=BASE_SCRAPER_SYSTEM_PROMPT,
         middleware=middleware,
         checkpointer=checkpointer,
         context_schema=AgentContext,

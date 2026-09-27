@@ -47,9 +47,13 @@ You are operating as a sub-agent under a Main Agent. You MUST follow these rules
 1. NO greetings or conversational responses. Execute the task immediately.
 2. Context & Plan: If a plan is shared, refer to it to understand the broader context and prior outputs.
    Do NOT modify the plan yourself. If adjustments are needed, propose them in your report.
-3. On ANY blocker (corrupted file / site blocked / selector failure / access denied):
-   STOP immediately and return EXACTLY:
-   [BLOCKER: <concise reason>]
+3. Recoverable failures (selector mismatch, delayed rendering, temporary network errors):
+   Read a relevant local skill and attempt evidence-based recovery within the task's time/retry budget.
+   If no budget was given, attempt at most 2 distinct recovery strategies for the same problem.
+   Never repeat the same failed action without new evidence. Recovery must stay within the authorized task.
+   STOP when authorization/credentials are missing, human intervention is required, or the budget is exhausted.
+   Then return EXACTLY:
+   [BLOCKER: <reason; recovery attempts; preserved state/artifacts; required next step>]
 4. On success: write all results to disk first, then return EXACTLY:
    [TASK REPORT]
    - Status: SUCCESS
@@ -63,7 +67,11 @@ _PROTOCOL_REMINDER = """\
 [CONTINUE SUB-AGENT PROTOCOL]
 This is a follow-up task in the same session.
 Apply the same strict sub-agent protocol established earlier:
-no conversational responses, return [BLOCKER] on failure, [TASK REPORT] on success.
+no conversational responses; try relevant skills for recoverable failures within the task budget
+(at most 2 distinct strategies for the same problem if unspecified).
+Return [BLOCKER] for missing authorization/credentials, required human intervention, or exhausted recovery;
+include previous attempts and preserved state. Do not reset the recovery budget on follow-up calls.
+Return [TASK REPORT] on success.
 ══════════════════════════════════════════════════════════"""
 
 
@@ -192,8 +200,11 @@ async def invoke_sub_agent(
           → Call task_update(task_id, 'COMPLETED').
       - [BLOCKER: <reason>]  (sub-agent encountered an unrecoverable issue)
           → Call task_update(task_id, 'BLOCKED').
-          → Create a fallback task with task_create() and retry with
-            corrected parameters or an alternative target.
+          → Inspect the cause, previous recovery attempts, preserved artifacts,
+            and remaining budget. Delegate a fallback only when new evidence
+            and budget support it; do not reset attempts on follow-up calls.
+          → Report missing authorization/credentials, required human intervention,
+            or exhausted recovery to the user with the required next step.
 
     Returns:
         [TASK REPORT] formatted string on synchronous success.
