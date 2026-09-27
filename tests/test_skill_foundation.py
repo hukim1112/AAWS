@@ -14,7 +14,7 @@ from langgraph.types import Command, interrupt
 from pydantic import Field
 
 from app.prompts.skill_builder import SkillPromptBuilder
-from app.prompts.skill_middleware import SkillCatalogMiddleware
+from app.middleware import SkillCatalogMiddleware
 
 
 def write_skill(root, name, description="A useful skill.", body="Read on demand."):
