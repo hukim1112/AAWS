@@ -161,17 +161,34 @@ os.makedirs(artifacts_dir, exist_ok=True)
 app.mount("/artifacts", StaticFiles(directory=artifacts_dir, html=True), name="artifacts")
 
 # --- Dynamic Agent Loader ---
+def _find_agent_module_path(agent_name: str, agents_dir: str) -> Optional[str]:
+    """에이전트 이름에 대해 단일 .py 파일 또는 디렉터리 패키지 모듈 경로를 탐색합니다."""
+    # 1. 단일 파일 에이전트: app/agents/{agent_name}.py
+    file_path = os.path.join(agents_dir, f"{agent_name}.py")
+    if os.path.isfile(file_path):
+        return f"app.agents.{agent_name}"
+
+    # 2. 디렉터리형 에이전트 패키지: app/agents/{agent_name}/
+    pkg_dir = os.path.join(agents_dir, agent_name)
+    if os.path.isdir(pkg_dir):
+        if os.path.isfile(os.path.join(pkg_dir, "agent.py")):
+            return f"app.agents.{agent_name}.agent"
+        elif os.path.isfile(os.path.join(pkg_dir, "__init__.py")):
+            return f"app.agents.{agent_name}"
+    return None
+
+
 async def get_or_load_agent(agent_name: str, app: FastAPI) -> Any:
     """
     런타임 비동기 이벤트 루프 하에서 에이전트 모듈을 지연 로딩하고 캐싱합니다.
+    단일 .py 파일 에이전트와 디렉터리형 에이전트 패키지(agent.py / __init__.py)를 모두 지원합니다.
     """
     if agent_name in app.state.agents:
         return app.state.agents[agent_name]
 
-    # 에이전트 파일 물리적 존재 유무 체크
     agents_dir = os.path.join(project_root, "app", "agents")
-    agent_file = os.path.join(agents_dir, f"{agent_name}.py")
-    if not os.path.exists(agent_file):
+    module_path = _find_agent_module_path(agent_name, agents_dir)
+    if not module_path:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found on server.")
 
     async with app.state.load_lock:
@@ -180,7 +197,6 @@ async def get_or_load_agent(agent_name: str, app: FastAPI) -> Any:
             return app.state.agents[agent_name]
 
         try:
-            module_path = f"app.agents.{agent_name}"
             # 모듈 리로드를 지원하여 파일 수정 시 서버 기동 없이 즉시 반영
             if module_path in sys.modules:
                 module = importlib.reload(sys.modules[module_path])
@@ -218,7 +234,7 @@ async def get_or_load_agent(agent_name: str, app: FastAPI) -> Any:
 @app.get("/agents")
 def api_list_agents():
     """
-    app/agents/ 폴더 내 파이썬 파일들을 스캔하여 사용 가능한 에이전트 목록을 동적으로 리턴합니다.
+    app/agents/ 폴더 내 파일 및 디렉터리 패키지를 스캔하여 사용 가능한 에이전트 목록을 동적으로 리턴합니다.
     """
     agents_dir = os.path.join(project_root, "app", "agents")
     available_agents = []
@@ -226,32 +242,53 @@ def api_list_agents():
     if not os.path.exists(agents_dir):
         return []
         
-    for filename in os.listdir(agents_dir):
-        # __init__.py 및 헬퍼 모듈 제외
-        if filename.endswith(".py") and not filename.startswith("__") and filename != "utils.py":
-            agent_name = filename[:-3]
-            description = f"Runtime loaded {agent_name} agent"
-            
-            try:
+    for item in sorted(os.listdir(agents_dir)):
+        # 숨김 파일, __pycache__, __init__.py 및 헬퍼/공통 모듈 제외
+        if item.startswith("__") or item.startswith(".") or item in ("utils.py", "common"):
+            continue
+
+        item_path = os.path.join(agents_dir, item)
+        agent_name = None
+        module_path = None
+
+        # 1. 파일형 에이전트 (.py)
+        if os.path.isfile(item_path) and item.endswith(".py"):
+            agent_name = item[:-3]
+            module_path = f"app.agents.{agent_name}"
+
+        # 2. 디렉터리형 에이전트 패키지
+        elif os.path.isdir(item_path):
+            if os.path.isfile(os.path.join(item_path, "agent.py")):
+                agent_name = item
+                module_path = f"app.agents.{agent_name}.agent"
+            elif os.path.isfile(os.path.join(item_path, "__init__.py")):
+                agent_name = item
                 module_path = f"app.agents.{agent_name}"
-                # 메타데이터 파싱을 위해 가볍게 임포트
-                if module_path in sys.modules:
-                    module = sys.modules[module_path]
-                else:
-                    module = importlib.import_module(module_path)
-                
-                metadata = getattr(module, "AGENT_METADATA", None)
-                if metadata and isinstance(metadata, dict):
-                    name = metadata.get("name", agent_name)
-                    description = metadata.get("description", description)
-                    available_agents.append({"name": name, "description": description})
-                else:
-                    available_agents.append({"name": agent_name, "description": description})
-            except Exception as scan_err:
-                logger.warning(f"⚠️ Failed to parse metadata for {agent_name}: {scan_err}")
+
+        if not agent_name or not module_path:
+            continue
+
+        description = f"Runtime loaded {agent_name} agent"
+        try:
+            # 메타데이터 파싱을 위해 가볍게 임포트
+            if module_path in sys.modules:
+                module = sys.modules[module_path]
+            else:
+                module = importlib.import_module(module_path)
+            
+            metadata = getattr(module, "AGENT_METADATA", None)
+            if metadata and isinstance(metadata, dict):
+                name = metadata.get("name", agent_name)
+                description = metadata.get("description", description)
+                available_agents.append({"name": name, "description": description})
+            else:
                 available_agents.append({"name": agent_name, "description": description})
-                
+        except Exception as scan_err:
+            logger.warning(f"⚠️ Failed to parse metadata for {agent_name}: {scan_err}")
+            available_agents.append({"name": agent_name, "description": description})
+            
     return available_agents
+
 
 # --- Unified Dynamic Routing ---
 @app.post("/agents/{agent_name}/invoke", response_model=ChatMessage)

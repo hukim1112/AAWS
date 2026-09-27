@@ -1,7 +1,7 @@
 # Sub-Agent 설계 패턴 — 핵심 교훈
 
 > **대상 독자**: AAWS(Agent-As-a-Worker-Service) 교육 수강생  
-> **관련 파일**: `app/tools/supervisor_tools.py`, `app/agents/supervisor.py`, `app/prompts/SUPERVISOR.py`, `app/client.py`
+> **관련 파일**: `app/tools/supervisor_tools.py`, `app/agents/supervisor/` (`tools.py`, `prompt.py`, `agent.py`), `app/client.py`
 
 ---
 
@@ -638,4 +638,4 @@ def fibonacci(n: int) -> int:
 
 ---
 
-*관련 구현 파일: `supervisor_tools.py` · `supervisor.py` · `SUPERVISOR.py` · `client.py`*
+*관련 구현 파일: `app/tools/supervisor_tools.py` · `app/agents/supervisor/` · `app/client.py`*

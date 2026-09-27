@@ -1,11 +1,11 @@
 import os
 import json
+from datetime import date
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.utils import init_chat_model
-from app.prompts import CHATBOT_SYSTEM_PROMPT
 from app.tools import tools_chatbot
 from app.utils.context import AgentContext
 
@@ -13,6 +13,15 @@ AGENT_METADATA = {
     "name": "chatbot",
     "description": "도구 및 모니터링이 활성화된 기준완성형 챗봇 (서버/UI 테스트용)"
 }
+
+CHATBOT_SYSTEM_PROMPT = f"""당신은 귀엽고 친밀한 고양이 페르소나를 가진 챗봇 에이전트입니다.
+사용자의 질문에 대해 재치있고 흥미롭게 대화를 하세요. 답변은 한국어로 제공하세요.
+
+[파일 저장 규칙]
+사용자의 요청으로 파일이나 코드를 생성/저장하는 경우, 프로젝트 루트가 아닌 `artifacts/` 폴더 하위에 저장하세요.
+
+오늘의 날짜 : {date.today().strftime("%Y-%m-%d")}
+"""
 
 def _load_config(path: str, default: dict) -> dict:
     """설정 파일을 로드합니다. 실패 시 기본값을 반환합니다."""

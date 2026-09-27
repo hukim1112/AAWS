@@ -34,11 +34,11 @@ tools_scraper = [
     bash_command, web_search, web_fetch,
 ]
 
-# 👑 Supervisor용 계획 및 프로덕션 오케스트레이션 도구 바인딩 (Mission 04 프로덕션 도구)
+# 👑 Supervisor용 도구 바인딩: 계획(5종) + 오케스트레이션(3종) + 범용(6종)
 tools_supervisor = [
     # Planning & Task Board
     enter_plan, exit_plan, task_create, task_list, task_update,
-    # Sub-Agent Orchestration (Long-Running & Reactive Wakeup)
+    # Sub-Agent Orchestration
     list_sub_agents, invoke_sub_agent, get_sub_agent_job_status,
     # Common File / Search
     file_read, file_writer, file_edit, grep_search, glob_search, web_search,
@@ -56,3 +56,5 @@ __all__ = [
     "enter_plan", "exit_plan", "task_create", "task_list", "task_update",
     "list_sub_agents", "invoke_sub_agent", "get_sub_agent_job_status",
 ]
+
+

@@ -1,8 +1,10 @@
 from datetime import date
+from pathlib import Path
+from app.prompts import SkillPromptBuilder
 
 today_date = date.today().strftime("%Y-%m-%d")
 
-SCRAPER_SYSTEM_PROMPT = f"""당신은 **The Scraper** — 웹 사이트 분석, 크롤링 코드 생성/실행, 데이터 수집을 수행하는 전문 에이전트입니다.
+_BASE_SCRAPER_SYSTEM_PROMPT = f"""당신은 **The Scraper** — 웹 사이트 분석, 크롤링 코드 생성/실행, 데이터 수집을 수행하는 전문 에이전트입니다.
 
 ═══════════════════════════════════════════════════════════════
 [핵심 역할]
@@ -171,12 +173,18 @@ data_sources.details는 method에 따라 자유 형식으로 작성합니다:
 - take_screenshot: 페이지 시각적 확인, 인터랙션 전후 비교, 디버깅에 활용
 - 셀렉터가 예상대로 작동하지 않을 때, 스크린샷으로 페이지 상태를 확인하세요.
 
-═══════════════════════════════════════════════════════════════
-[에러 복구]
-═══════════════════════════════════════════════════════════════
-- 셀렉터 매칭 0건 → take_screenshot으로 페이지 상태 확인 → extract_dom_skeleton부터 재분석
-- 에러 페이지 감지 → URL 올바른지 재확인, 사용자에게 보고
-- JS 렌더링 실패 → wait_ms를 5000~8000으로 늘려 재시도
-
 오늘의 날짜: {today_date}
 """
+
+# 에이전트 전용 스킬 카탈로그 동적 주입 (Progressive Disclosure)
+_skills_dir = Path(__file__).resolve().parent / "skills"
+_skills_block = SkillPromptBuilder(skills_dirs=[str(_skills_dir)]).assemble()
+
+SCRAPER_SYSTEM_PROMPT = (
+    f"{_BASE_SCRAPER_SYSTEM_PROMPT}\n{_skills_block}"
+    if _skills_block
+    else _BASE_SCRAPER_SYSTEM_PROMPT
+)
+
+
+
