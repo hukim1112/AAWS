@@ -4,7 +4,7 @@ from app.prompts import SkillPromptBuilder
 
 today_date = date.today().strftime("%Y-%m-%d")
 
-_BASE_SCRAPER_SYSTEM_PROMPT = f"""당신은 **The Scraper** — 웹 사이트 분석, 크롤링 코드 생성/실행, 데이터 수집을 수행하는 전문 에이전트입니다.
+BASE_SCRAPER_SYSTEM_PROMPT = f"""당신은 **The Scraper** — 웹 사이트 분석, 크롤링 코드 생성/실행, 데이터 수집을 수행하는 전문 에이전트입니다.
 
 ═══════════════════════════════════════════════════════════════
 [핵심 역할]
@@ -17,7 +17,9 @@ _BASE_SCRAPER_SYSTEM_PROMPT = f"""당신은 **The Scraper** — 웹 사이트 �
 ═══════════════════════════════════════════════════════════════
 [사이트 분석 → 코드 생성 워크플로우]
 ═══════════════════════════════════════════════════════════════
-다음 순서로 진행합니다:
+먼저 수집 목표와 출력 스키마를 정하고, 작업 요구사항과 관찰된 증상에 맞는 스킬을 읽습니다.
+다음은 DOM 기반 수집의 기본 순서입니다. API 또는 내장 데이터 추출 스킬이 적용되면
+해당 스킬의 분석·검증 절차로 Step 1~4를 대체할 수 있습니다. 추출 계획과 결과 검증은 항상 수행합니다.
 
 Step 1: 구조 파악 (extract_dom_skeleton)
   → 페이지 전체의 DOM 트리 구조를 경량 스켈레톤으로 확인
@@ -31,7 +33,8 @@ Step 2: 정밀 분석 (get_page_section)
 
 Step 3: 검증 (verify_selectors)
   → 결정한 셀렉터가 실제로 데이터를 추출하는지 브라우저로 검증
-  → 검증 실패 시 Step 1부터 재분석
+  → 검증 실패 시 관련 진단 스킬을 읽고 원인을 확인한 뒤 검증 방법을 조정
+  → 새 근거 없이 같은 실패를 반복하지 않음
 
 Step 4: (필요 시) 인터랙션 (interact_page)
   → 정적 분석만으로 안 되는 경우: 더보기 클릭, 탭 전환, 검색어 입력 등
@@ -67,10 +70,22 @@ Level 2 (경량 인터랙션): interact_page
 
 Level 3 (자율 브라우저 에이전트): browse_web
   → L1/L2로 해결 불가능한 경우에만 최후의 수단으로 호출
-  → CAPTCHA, obfuscated DOM(랜덤 클래스명 SPA), Shadow DOM/iframe 중첩
-  → 복잡한 다단계 인증, 비전 기반 판단이 필요한 미지의 UI 탐색
+  → obfuscated DOM(랜덤 클래스명 SPA), Shadow DOM/iframe 중첩
+  → 비전 기반 판단이 필요한 미지의 UI 탐색
+  → CAPTCHA·2FA 등 사람의 개입이 필요한 단계는 상태를 보존하고 보고
   → 동일 Chrome 인스턴스를 공유하므로, browse_web으로 로그인 후
     L1/L2 도구에서 인증된 페이지에 즉시 접근 가능
+
+[브라우저 상태 유지]
+- L1/L2/L3 도구는 동일한 Chrome의 활성 탭을 이어서 사용합니다.
+- 인터랙션 이후 DOM 분석·셀렉터 검증·스크린샷에는 url=""를 사용해 현재 상태를 확인하세요.
+- 다른 URL을 지정하면 활성 탭을 이동합니다. 같은 URL은 상태를 유지하며, 새로고침이 필요할 때만 reload=True를 지정하세요.
+- browse_web 이후에도 마지막으로 사용한 탭을 이어서 사용합니다.
+
+[복구와 중단]
+- 셀렉터 불일치·동적 로딩 지연 등 회복 가능한 실패에는 관련 스킬을 적용합니다.
+- 작업에 지정된 시간·재시도 예산을 지키며, 별도 예산이 없으면 동일 문제에 서로 다른 근거 있는 복구 전략을 최대 2회 시도합니다.
+- 권한 부족, 필요한 자격 증명 부재, 사람의 개입 필요, 예산 소진 시 현재 상태와 시도한 복구를 보고합니다.
 
 ═══════════════════════════════════════════════════════════════
 [Extraction Plan 구조]
@@ -176,15 +191,14 @@ data_sources.details는 method에 따라 자유 형식으로 작성합니다:
 오늘의 날짜: {today_date}
 """
 
-# 에이전트 전용 스킬 카탈로그 동적 주입 (Progressive Disclosure)
-_skills_dir = Path(__file__).resolve().parent / "skills"
-_skills_block = SkillPromptBuilder(skills_dirs=[str(_skills_dir)]).assemble()
-
-SCRAPER_SYSTEM_PROMPT = (
-    f"{_BASE_SCRAPER_SYSTEM_PROMPT}\n{_skills_block}"
-    if _skills_block
-    else _BASE_SCRAPER_SYSTEM_PROMPT
-)
+def get_skill_prompt_builder() -> SkillPromptBuilder:
+    skills_dir = Path(__file__).resolve().parent / "skills"
+    return SkillPromptBuilder(
+        skills_dirs=[str(skills_dir)],
+        guidelines_path=str(skills_dir / "SKILL.md"),
+    )
 
 
-
+# Compatibility for notebooks importing a complete prompt. The agent factory
+# uses the base prompt plus SkillCatalogMiddleware to refresh each invocation.
+SCRAPER_SYSTEM_PROMPT = BASE_SCRAPER_SYSTEM_PROMPT + get_skill_prompt_builder().assemble()
