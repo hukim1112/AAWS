@@ -1,25 +1,60 @@
 ---
 name: api_reverse_engineering
-description: 난독화된 DOM 대신 백엔드 비공개 JSON API(XHR/Fetch) 가로채기 및 초고속 직수집 기법
+description: Intercept internal backend JSON APIs (XHR/Fetch) and extract SSR hydration states (__NEXT_DATA__) to bypass complex DOM parsing.
 ---
 
-# 🌐 네트워크 API 역공학 직수집 플레이북 (API Reverse Engineering)
+# 🌐 Network API Reverse Engineering & SSR Extraction Playbook
 
-
-웹사이트가 React, Vue, Next.js 등 복잡한 프론트엔드 프레임워크로 작성되어 DOM 클래스명이 난독화(예: `class="_3xY8a_0"`)되어 있거나, 무한 스크롤 데이터가 DOM 파싱으로 다루기 까다로울 때 적용하는 초고속 직수집 패턴입니다.
-
----
-
-## 1. 핵심 원리: DOM을 긁지 말고, 원본 JSON API를 낚아채라
-
-현대 웹사이트는 화면을 그리기 전에 **백엔드 REST API 또는 GraphQL 엔드포인트**에서 JSON 형식의 순수 데이터를 받아옵니다.  
-따라서 복잡한 HTML 셀렉터를 고생해서 찾을 필요 없이, **브라우저가 호출하는 그 비공개 API를 파이썬 스크립트에서 직접 호출**하는 것이 가장 깔끔하고 빠릅니다.
+When target websites utilize modern SPA/SSR frameworks (React, Vue, Next.js, Nuxt), DOM class names are often randomized or obfuscated (e.g., `class="_3xY8a_0"`), and data is loaded dynamically. Instead of struggling with fragile CSS selectors, this playbook guides you to extract data directly from the underlying JSON source.
 
 ---
 
-## 2. Playwright를 통한 네트워크 요청 가로채기 (Sniffing)
+## 0. Pre-flight Check: SSR Hydration State Extraction (`__NEXT_DATA__`)
 
-스크래퍼가 페이지를 방문할 때 어떤 백엔드 API가 호출되는지 탐지하는 스크립트 템플릿:
+Before executing dynamic browser interactions or selector parsing, check if the entire page data is already serialized in the static HTML:
+
+```python
+import json
+from bs4 import BeautifulSoup
+
+def extract_ssr_state(html_content: str):
+    soup = BeautifulSoup(html_content, "html.parser")
+    
+    # 1. Next.js hydration script
+    next_data = soup.find("script", id="__NEXT_DATA__")
+    if next_data and next_data.string:
+        try:
+            payload = json.loads(next_data.string)
+            # Extracted dataset usually resides in props.pageProps
+            return payload.get("props", {}).get("pageProps", {})
+        except json.JSONDecodeError:
+            pass
+
+    # 2. Nuxt.js state script
+    nuxt_data = soup.find("script", id="__NUXT_DATA__")
+    if nuxt_data and nuxt_data.string:
+        try:
+            return json.loads(nuxt_data.string)
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Schema.org structured data (JSON-LD)
+    json_ld = soup.find("script", type="application/ld+json")
+    if json_ld and json_ld.string:
+        try:
+            return json.loads(json_ld.string)
+        except json.JSONDecodeError:
+            pass
+
+    return None
+```
+> **Rule of Thumb**: If `__NEXT_DATA__` exists, you can extract 100% of the structured dataset instantly without headless browser interaction.
+
+---
+
+## 1. Network Sniffing: Intercept Hidden JSON APIs via Playwright
+
+When data is loaded dynamically via background AJAX/Fetch requests, sniff the network traffic to identify internal endpoints:
 
 ```python
 import json
@@ -32,11 +67,10 @@ def sniff_api_requests(target_url: str):
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
-        # 네트워크 응답 가로채기 핸들러 등록
         def handle_response(response):
-            # JSON 데이터를 반환하는 XHR/Fetch 요청 필터링
             content_type = response.headers.get("content-type", "")
-            if "application/json" in content_type and "api" in response.url:
+            # Filter XHR/Fetch returning JSON data
+            if "application/json" in content_type and any(k in response.url for k in ["api", "v1", "v2", "graphql", "list", "query"]):
                 try:
                     data = response.json()
                     captured_apis.append({
@@ -56,9 +90,9 @@ def sniff_api_requests(target_url: str):
 
 ---
 
-## 3. 포착된 API로 직접 수집 스크립트 작성 (`httpx` / `requests`)
+## 2. Direct High-Speed Collection via HTTP Client (`httpx` / `requests`)
 
-포착된 URL, 쿼리 파라미터, 필수 헤더(`Referer`, `Authorization`, `Cookie`)를 복사하여 경량 HTTP 클라이언트로 즉시 대량 수집합니다:
+Once you identify the backend endpoint and query parameters, bypass headless browsers entirely and query the API directly:
 
 ```python
 import requests
@@ -67,7 +101,7 @@ import json
 def fetch_direct_api():
     endpoint = "https://api.target-site.com/v1/products"
     headers = {
-        "User-Agent": "Mozilla/5.0 ...",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         "Referer": "https://target-site.com/",
         "Accept": "application/json"
     }
@@ -80,25 +114,25 @@ def fetch_direct_api():
     all_data = []
     for page in range(1, 6):
         params["page"] = page
-        resp = requests.get(endpoint, headers=headers, params=params)
+        resp = requests.get(endpoint, headers=headers, params=params, timeout=10)
         if resp.status_code == 200:
             items = resp.json().get("items", [])
             if not items:
                 break
             all_data.extend(items)
         else:
-            print(f"Error at page {page}: {resp.status_code}")
+            print(f"Failed at page {page}: {resp.status_code}")
             break
 
     with open("artifacts/data/api_collected.json", "w", encoding="utf-8") as f:
         json.dump(all_data, f, ensure_ascii=False, indent=2)
 
-    return f"총 {len(all_data)}건 수집 완료"
+    return len(all_data)
 ```
 
 ---
 
-## 4. 체크리스트
-- [ ] 브라우저 렌더링에 비해 수집 속도가 10~50배 이상 빠릅니다.
-- [ ] HTML 셀렉터 변경에 영향을 받지 않아 코드가 훨씬 견고합니다.
-- [ ] 요청 시 반드시 원본 페이지의 `Referer` 헤더를 포함해야 403 차단을 피할 수 있습니다.
+## 3. Checklist
+- [ ] Check `<script id="__NEXT_DATA__">` or `application/ld+json` first.
+- [ ] Always forward necessary request headers (`Referer`, `Authorization`, cookies) to avoid 403 Forbidden.
+- [ ] API-based collection is 10x-50x faster and immune to front-end HTML/CSS redesigns.
