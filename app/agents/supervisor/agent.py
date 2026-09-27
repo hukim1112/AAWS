@@ -42,16 +42,12 @@ async def create_agent_executor():
     checkpointer = AsyncSqliteSaver(conn)
     await checkpointer.setup()
 
-    # 3. 미들웨어 파이프라인
-    middleware = []
-
-    # 4. Supervisor 에이전트 구축
+    # 3. Supervisor 에이전트 구축
     #    tools_supervisor = Planning(5) + Orchestration(3) + Common(6) = 14종
     supervisor_agent = create_agent(
         model=llm,
         tools=tools_supervisor,
         system_prompt=SUPERVISOR_SYSTEM_PROMPT,
-        middleware=middleware,
         checkpointer=checkpointer,
         context_schema=AgentContext,
     )
