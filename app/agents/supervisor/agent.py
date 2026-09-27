@@ -5,11 +5,11 @@
 Planning 도구로 계획을 수립하고, invoke_sub_agent로 전문 sub-agent(Scraper,
 Analyst 등)에게 작업을 위임하여 복잡한 멀티스텝 미션을 완수한다.
 
-아키텍처:
-  👑 Supervisor (이 파일)
-   ├── Planning Tools: enter_plan, task_create, task_update, task_list, exit_plan
-   ├── Orchestration: invoke_sub_agent → POST /agents/{role}/invoke (AsyncAgentClient)
-   └── Common Tools: file_read, file_writer, file_edit, grep_search, glob_search, web_search
+패키지 구조:
+  app/agents/supervisor/
+   ├── agent.py      (에이전트 조립 및 팩토리)
+   ├── prompt.py     (SUPERVISOR_SYSTEM_PROMPT 및 위임/보고 원칙)
+   └── tools.py      (계획 5종 + 오케스트레이션 3종 + 공통 6종 도구 바인딩)
 ===============================================================================
 """
 
@@ -20,9 +20,10 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.utils import init_chat_model
-from app.prompts import SUPERVISOR_SYSTEM_PROMPT
-from app.tools import tools_supervisor
 from app.utils.context import AgentContext
+
+from .prompt import SUPERVISOR_SYSTEM_PROMPT
+from .tools import tools_supervisor
 
 AGENT_METADATA = {
     "name": "supervisor",
@@ -68,7 +69,7 @@ async def create_agent_executor():
             )
 
     # 4. Supervisor 에이전트 구축
-    #    tools_supervisor = Planning(5) + Orchestration(2) + Common(6) = 13종
+    #    tools_supervisor = Planning(5) + Orchestration(3) + Common(6) = 14종
     supervisor_agent = create_agent(
         model=llm,
         tools=tools_supervisor,

@@ -1,6 +1,6 @@
 # 🎯 Mission 01: Chatbot 에이전트에 커스텀 기억 도구(읽기/갱신) 연결 및 UI 테스트
 
-본 미션은 `1_Create_agent.ipynb`에서 학습한 내용을 바탕으로, 교육생 여러분이 직접 커스텀 도구를 작성하고 실제 프로덕션 코드베이스인 `app/agents/chatbot.py`에 연결하여 **FastAPI 서버와 Chainlit UI 환경에서 양방향 장기 기억(읽기 & 갱신)을 실시간으로 테스트**하는 실습 과제입니다.
+본 미션은 `1_Create_agent.ipynb`에서 학습한 내용을 바탕으로, 교육생 여러분이 직접 커스텀 도구를 작성하고 예시 에이전트인 `app/agents/chatbot.py`에 연결하여 **FastAPI 서버와 Chainlit UI 환경에서 실시간으로 테스트**하는 실습 과제입니다.
 
 ---
 
@@ -68,37 +68,44 @@ def update_user_memory(content: str) -> str:
 
 ---
 
-### 2단계: `app/agents/chatbot.py`에 도구 임포트 및 시스템 프롬프트 연결
+### 2단계: `app/agents/chatbot.py`에 도구 임포트 및 행동 규칙 추가
 
-`app/agents/chatbot.py` 파일을 열고, 방금 작성한 `custom_tools` 모듈로부터 도구들을 임포트하여 에이전트 도구 목록에 추가합니다:
+`app/agents/chatbot.py` 파일을 열고, 방금 작성한 `custom_tools` 모듈로부터 도구들을 임포트하여 에이전트 도구 목록에 추가합니다.
+이때 기존의 귀여운 고양이 페르소나와 파일 저장 규칙을 그대로 유지하면서, 도구를 자율적으로 활용할 수 있도록 **`[행동 규칙 - 기억 관리]`** 지침을 기존 `CHATBOT_SYSTEM_PROMPT`에 추가하세요:
 
 ```python
 # app/agents/chatbot.py
 
+from datetime import date
 # 1. custom_tools에서 도구 임포트
 from app.tools.custom_tools import read_user_memory, update_user_memory
 from app.tools import tools_chatbot
 # ...
 
+# 2. 기존 CHATBOT_SYSTEM_PROMPT에 기억 관리 행동 규칙 추가
+CHATBOT_SYSTEM_PROMPT = f"""당신은 귀엽고 친밀한 고양이 페르소나를 가진 챗봇 에이전트입니다.
+사용자의 질문에 대해 재치있고 흥미롭게 대화를 하세요. 답변은 한국어로 제공하세요.
+
+[파일 저장 규칙]
+사용자의 요청으로 파일이나 코드를 생성/저장하는 경우, 프로젝트 루트가 아닌 `artifacts/` 폴더 하위에 저장하세요.
+
+[행동 규칙 - 기억 관리]
+1. 사용자와의 대화가 시작되면 가장 먼저 `read_user_memory`를 호출하여 사용자의 프로필을 확인하고 맞춤 인사를 건네세요.
+2. 사용자가 대화 중에 새로운 취미, 경력 변동, 전문 분야 변경 등 자신의 프로필 정보를 알려주면,
+   기존 프로필 내용에 해당 변경 사항을 자연스럽게 반영/통합하여 `update_user_memory` 도구를 호출해 USER.md를 최신 상태로 갱신하세요.
+
+오늘의 날짜 : {date.today().strftime("%Y-%m-%d")}
+"""
+
 async def create_agent_executor():
     # ...
-    # 2. tools_chatbot 목록에 커스텀 기억 도구들 추가
+    # 3. tools_chatbot 목록에 커스텀 기억 도구들 추가
     active_tools = tools_chatbot + [read_user_memory, update_user_memory]
-    
-    # 3. 에이전트 시스템 프롬프트 정의 (기억 조회 및 갱신 지침 명시)
-    SYSTEM_PROMPT = """
-    당신은 사용자 맞춤형 지능형 비서입니다.
-    
-    [행동 규칙]
-    1. 사용자와의 대화가 시작되면 가장 먼저 `read_user_memory`를 호출하여 사용자의 프로필을 확인하고 맞춤 인사를 건네세요.
-    2. 사용자가 대화 중에 새로운 취미, 경력 변동, 전문 분야 변경 등 자신의 프로필 정보를 알려주면,
-       기존 프로필 내용에 해당 변경 사항을 자연스럽게 반영/통합하여 `update_user_memory` 도구를 호출해 USER.md를 최신 상태로 갱신하세요.
-    """
     
     chatbot_agent = create_agent(
         model=llm,
         tools=active_tools,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=CHATBOT_SYSTEM_PROMPT,
         middleware=middleware,
         checkpointer=checkpointer,
         context_schema=AgentContext

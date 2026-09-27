@@ -1,16 +1,16 @@
-# 🎯 Mission 04: Long-Running Agent 아키텍처 연동 및 Prompt-as-Code 리팩토링
+# 🎯 Mission 04: Long-Running Agent 아키텍처 연동 및 비동기 오케스트레이션 업그레이드
 
 본 미션은 `Mission 03`에서 구축한 동기식 인프로세스(In-Process) 멀티에이전트 구조의 한계를 극복하고, **실제 프로덕션 엔터프라이즈 환경에서 수 분 이상 소요되는 대규모 작업(웹 크롤링, 심층 리서치 등)을 안정적으로 처리하기 위해 비동기 작업 큐(Job Queue)와 이벤트 기반 리액티브 웨이크업(Event-Driven Reactive Wakeup) 아키텍처를 연동**하는 실습 과제입니다.
 
-동시에, Mission 03에서 코드 내부에 인라인으로 작성했던 Supervisor 프롬프트를 **`app/prompts/SUPERVISOR.py`로 독립 모듈화(Prompt-as-Code)**하고, 백그라운드 비동기 위임 원칙을 반영하여 엔터프라이즈급 아키텍처로 리팩토링합니다!
+동시에, Mission 03에서 구축한 Supervisor의 프롬프트(`app/agents/supervisor/prompt.py`)에 **백그라운드 비동기 위임 원칙**을 반영하고, 도구(`app/agents/supervisor/tools.py`)를 프로덕션 비동기 도구 모듈(`app.tools.supervisor_tools`)로 교체하여 엔터프라이즈급 아키텍처로 업그레이드합니다!
 
 ---
 
-## 💡 왜 Long-Running 아키텍처와 Prompt-as-Code가 필요한가?
+## 💡 왜 Long-Running 아키텍처가 필요한가?
 
-| 비교 항목 | Mission 03 (프로토타입 구조) | Mission 04 (프로덕션 롱러닝 아키텍처) |
+| 비교 항목 | Mission 03 (인프로세스 프로토타입) | Mission 04 (프로덕션 롱러닝 아키텍처) |
 |:---|:---|:---|
-| **프롬프트 관리** | `app/agents/supervisor.py` 내부에 문자열 인라인 작성 | `app/prompts/SUPERVISOR.py` 독립 모듈 분리 (**Prompt-as-Code**) |
+| **도구 바인딩** | `app/agents/supervisor/tools.py` 내부의 로컬 함수 (`invoke_sub_agent`) | 프로덕션 `app.tools.supervisor_tools` 모듈 연동 |
 | **실행 방식** | 단일 프로세스 루프 안에서 하위 에이전트 동기 호출 (`ainvoke`) | FastAPI 백그라운드 작업 큐(`POST /jobs`)에 등록 후 `job_id` 즉시 반환 |
 | **타임아웃 문제** | 2~5분 이상 긴 작업 시 **HTTP 연결 끊김 및 브라우저 타임아웃** 발생 | **타임아웃 없음** (즉시 응답 반환 후 서버 백그라운드에서 실행) |
 | **사용자 경험 (UX)** | 하위 작업이 끝날 때까지 **채팅창 전체가 멈춤(Freezing)** | 즉시 작업 접수 확인 메시지 수신, UI 멈춤 없이 대기 |
@@ -20,8 +20,9 @@
 
 ## 📂 실습 대상 및 핵심 파일
 * **제공된 프로덕션 도구 모듈**: `app/tools/supervisor_tools.py` (이미 구현 완비)
-* **프롬프트 분리 생성 대상**: `app/prompts/SUPERVISOR.py` (새로 생성) & `app/prompts/__init__.py`
-* **에이전트 리팩토링 대상 파일**: `app/agents/supervisor.py` (프롬프트 임포트 & 도구 교체)
+* **프롬프트 업그레이드 대상**: `app/agents/supervisor/prompt.py` (비동기 위임 원칙 및 렌더링 태그 반영)
+* **도구 교체 대상 파일**: `app/agents/supervisor/tools.py` (프로덕션 도구로 교체 바인딩)
+* **에이전트 팩토리 파일**: `app/agents/supervisor/agent.py` (연동 확인)
 * **백엔드 서버 엔진**: `app/server.py` (`/agents/{role}/jobs` 및 리액티브 워커)
 * **프론트엔드 실시간 모니터**: `app/chainlit_ui.py` (작업 폴링 및 실시간 렌더링)
 * **참고 이론 문서**: `lessons_summary/03_Long_running_agent.md`, `lessons_summary/01_Agent_Engineering_Principles.md`
@@ -30,8 +31,8 @@
 
 ## 📋 미션 목표
 1. **[프로덕션 도구 확인]**: `app/tools/supervisor_tools.py`에 구현된 3대 오케스트레이션 도구(`list_sub_agents`, `invoke_sub_agent`, `get_sub_agent_job_status`)의 역할을 확인합니다.
-2. **[Prompt-as-Code 모듈 분리]**: `app/prompts/SUPERVISOR.py`를 생성하여 백그라운드 위임 원칙을 탑재하고, `app/prompts/__init__.py`에 등록합니다.
-3. **[Supervisor 리팩토링 & 도구 교체]**: `app/agents/supervisor.py`에서 인라인 프롬프트를 제거하고 `from app.prompts import SUPERVISOR_SYSTEM_PROMPT`로 임포트하며, 프로덕션 도구들로 바인딩을 교체합니다.
+2. **[비동기 위임 프롬프트 업그레이드]**: `app/agents/supervisor/prompt.py`에 백그라운드 위임 원칙(`run_in_background=True` 기본 원칙)과 UI 렌더링 태그 규칙을 탑재합니다.
+3. **[Supervisor 도구 교체]**: `app/agents/supervisor/tools.py`에서 기존 로컬 도구 대신 프로덕션 도구 모듈(`app.tools.supervisor_tools`)로 교체 바인딩합니다.
 4. **[서버 & Chat UI 가동]**: FastAPI 백엔드와 Chainlit 프론트엔드를 실행합니다.
 5. **[비동기 실행 & 리액티브 웨이크업 검증]**:
    - Chat UI에서 Supervisor에게 웹 스크래핑을 지시합니다.
@@ -52,13 +53,12 @@
 
 ---
 
-### 2단계: Prompt-as-Code — `app/prompts/SUPERVISOR.py` 분리 생성하기
+### 2단계: `app/agents/supervisor/prompt.py`에 비동기 위임 원칙 반영하기
 
-비즈니스 로직과 프롬프트를 분리하는 **Prompt-as-Code** 원칙(`01_Agent_Engineering_Principles.md` 2.1절)에 따라, `app/prompts/SUPERVISOR.py` 파일을 신규 생성하고 **백그라운드 위임 원칙**을 담은 완성형 프롬프트를 작성합니다:
+비즈니스 로직과 프롬프트를 분리하여 관리하는 아키텍처에 따라, `app/agents/supervisor/prompt.py`를 열고 **백그라운드 위임 원칙**과 **UI 렌더링 태그 규칙**을 반영하여 프롬프트를 업그레이드합니다:
 
-#### 📄 `app/prompts/SUPERVISOR.py` 생성:
 ```python
-# app/prompts/SUPERVISOR.py
+# app/agents/supervisor/prompt.py
 
 from datetime import date
 
@@ -118,88 +118,43 @@ SUPERVISOR_SYSTEM_PROMPT = f"""당신은 사용자의 모든 요청을 편안하
 """
 ```
 
-#### 📄 `app/prompts/__init__.py`에 Export 등록:
-`app/prompts/__init__.py` 파일을 열고 `SUPERVISOR_SYSTEM_PROMPT`를 export 목록에 추가합니다:
-
-```python
-# app/prompts/__init__.py
-
-from .CHATBOT import CHATBOT_SYSTEM_PROMPT
-from .SCRAPER import SCRAPER_SYSTEM_PROMPT
-from .SUPERVISOR import SUPERVISOR_SYSTEM_PROMPT
-
-__all__ = [
-    "CHATBOT_SYSTEM_PROMPT",
-    "SCRAPER_SYSTEM_PROMPT",
-    "SUPERVISOR_SYSTEM_PROMPT",
-]
-```
-
 ---
 
-### 3단계: `app/agents/supervisor.py` 프로덕션 리팩토링
+### 3단계: `app/agents/supervisor/tools.py` 프로덕션 도구 교체
 
-이제 `app/agents/supervisor.py`를 열어:
-1. 기존 인라인 프롬프트 문자열을 제거하고, 방금 만든 `from app.prompts import SUPERVISOR_SYSTEM_PROMPT`를 임포트합니다.
-2. 기존 인프로세스 도구 대신 `from app.tools.supervisor_tools import ...`를 장착합니다:
+이제 `app/agents/supervisor/tools.py`를 열어 기존 인프로세스 도구 대신 `app.tools.supervisor_tools`의 프로덕션 도구들을 바인딩하도록 교체합니다:
 
 ```python
-# app/agents/supervisor.py
+# app/agents/supervisor/tools.py
 
-import os
-import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langchain.agents import create_agent
-
-from app.utils import init_chat_model
-from app.utils.context import AgentContext
 from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update
-from app.tools.common import file_read, file_writer, glob_search, grep_search
+from app.tools.common import (
+    file_read, file_writer, file_edit, glob_search, grep_search, web_search
+)
 
-# ── 1. Prompt-as-Code: 분리된 시스템 프롬프트 임포트 ──
-from app.prompts import SUPERVISOR_SYSTEM_PROMPT
-
-# ── 2. 프로덕션 Long-Running 도구 모듈 임포트 ──
+# ── 1. 프로덕션 Long-Running 도구 모듈 임포트 ──
 from app.tools.supervisor_tools import (
     invoke_sub_agent,
     list_sub_agents,
     get_sub_agent_job_status
 )
-# 또는 tools_supervisor를 통째로 임포트할 수도 있습니다:
-# from app.tools import tools_supervisor
 
-AGENT_METADATA = {
-    "name": "supervisor",
-    "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트"
-}
+# ── 2. Supervisor 전체 도구 바인딩 목록 (14종) ──
+tools_supervisor = [
+    # Planning & Task Board (5종)
+    enter_plan, exit_plan, task_create, task_list, task_update,
+    
+    # Sub-Agent Orchestration (3종)
+    list_sub_agents, invoke_sub_agent, get_sub_agent_job_status,
+    
+    # Common File / Search Tools (6종)
+    file_read, file_writer, file_edit, glob_search, grep_search, web_search,
+]
 
-async def create_agent_executor():
-    llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
-    
-    db_dir = "app/database"
-    os.makedirs(db_dir, exist_ok=True)
-    checkpoints_path = os.path.join(db_dir, "checkpoints.db")
-    
-    conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-    checkpointer = AsyncSqliteSaver(conn)
-    await checkpointer.setup()
-    
-    # ── 3. 프로덕션 도구 목록 장착 ──
-    tools = [
-        enter_plan, exit_plan, task_create, task_list, task_update,
-        invoke_sub_agent, list_sub_agents, get_sub_agent_job_status,
-        file_read, file_writer, glob_search, grep_search
-    ]
-    
-    supervisor_agent = create_agent(
-        model=llm,
-        tools=tools,
-        system_prompt=SUPERVISOR_SYSTEM_PROMPT,
-        checkpointer=checkpointer,
-        context_schema=AgentContext
-    )
-    return supervisor_agent
+__all__ = ["tools_supervisor"]
 ```
+
+> 💡 **참고**: `app/agents/supervisor/agent.py`는 이미 `prompt.py`의 `SUPERVISOR_SYSTEM_PROMPT`와 `tools.py`의 `tools_supervisor`를 참조하고 있으므로, 코드를 추가로 수정할 필요 없이 프롬프트와 도구 교체가 즉시 반영됩니다!
 
 ---
 
@@ -265,9 +220,8 @@ sequenceDiagram
 ---
 
 ## ✅ 성공 검증 체크리스트
-- [ ] `app/prompts/SUPERVISOR.py`를 생성하고 `app/prompts/__init__.py`에 정상 등록했는가?
-- [ ] `app/agents/supervisor.py`에서 `from app.prompts import SUPERVISOR_SYSTEM_PROMPT`로 분리된 프롬프트를 임포트했는가?
-- [ ] `supervisor_tools.py`의 프로덕션 도구들이 성공적으로 연결되었는가?
+- [ ] `app/agents/supervisor/prompt.py`에 백그라운드 비동기 위임 원칙(`run_in_background=True`)이 정상 반영되었는가?
+- [ ] `app/agents/supervisor/tools.py`에 `supervisor_tools.py`의 프로덕션 도구들이 성공적으로 교체 연결되었는가?
 - [ ] Supervisor가 작업을 비동기로 넘긴 후 `[JOB SUBMITTED]` 알림과 함께 즉시 턴을 완료하는가?
 - [ ] 서버 로그에서 Scraper가 백그라운드 워커로 독립 실행되는 것을 확인했는가?
 - [ ] 작업 완료 후 **Reactive Wakeup**이 발동하여 사용자 추가 입력 없이 Supervisor가 최종 브리핑을 UI에 렌더링했는가?

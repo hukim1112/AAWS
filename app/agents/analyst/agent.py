@@ -1,9 +1,17 @@
 """
 ===============================================================================
-[Phase 3] Scraper Agent — 사이트 분석 + 크롤링 코드 생성/실행 + 데이터 수집
+[AAWS Agent] Analyst — 데이터 분석·시각화·보고서 전문 에이전트
 ===============================================================================
-Navigator(사이트 분석) + Coder(코드 생성/실행) 기능을 통합한 단일 에이전트.
-동일 컨텍스트에서 사이트 분석 → 셀렉터 결정 → 스크립트 작성 → 실행 → 검증까지 수행.
+데이터 파일(JSON/CSV/Excel 등)을 분석하고, 차트/그래프를 생성하며,
+전문적인 Excel 보고서와 인터랙티브 HTML 대시보드를 생성합니다.
+
+패키지 구조:
+  app/agents/analyst/
+   ├── agent.py      (에이전트 조립 및 팩토리)
+   ├── prompt.py     (ANALYST_SYSTEM_PROMPT 및 UI 렌더링 태그 가이드)
+   ├── tools.py      (6종 분석/출력 도구 + 6종 공통 도구 바인딩)
+   └── skills/       (xlsx_guide, chart_patterns, design_tokens, data_analysis)
+===============================================================================
 """
 
 import os
@@ -13,13 +21,14 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.utils import init_chat_model
-from app.prompts import SCRAPER_SYSTEM_PROMPT
-from app.tools import tools_scraper
 from app.utils.context import AgentContext
 
+from .prompt import ANALYST_SYSTEM_PROMPT
+from .tools import tools_analyst
+
 AGENT_METADATA = {
-    "name": "scraper",
-    "description": "사이트 분석 + 크롤링 코드 생성/실행 + 데이터 수집을 수행하는 Scraper 에이전트"
+    "name": "analyst",
+    "description": "데이터 분석·시각화·보고서 전문 에이전트 — 데이터 프로파일링, 차트 생성, Excel/HTML 보고서를 생성합니다.",
 }
 
 
@@ -35,9 +44,9 @@ def _load_config(path: str, default: dict) -> dict:
 
 
 async def create_agent_executor():
-    # 1. LLM 설정 — Universal Chat Model Factory 기반 gemini-3.7-flash 사용
+    # 1. LLM 설정
     llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
-    
+
     # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
     db_dir = "app/database"
     os.makedirs(db_dir, exist_ok=True)
@@ -46,7 +55,7 @@ async def create_agent_executor():
     conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
     checkpointer = AsyncSqliteSaver(conn)
     await checkpointer.setup()
-    
+
     # 3. HITL 미들웨어 동적 구성 (configs/hitl.config 기반)
     hitl_cfg = _load_config("./configs/hitl.config", {"hitl_enabled": False})
     middleware = []
@@ -56,17 +65,18 @@ async def create_agent_executor():
             middleware.append(
                 HumanInTheLoopMiddleware(
                     interrupt_on=interrupt_on,
-                    description_prefix="도구 실행 승인 요청"
+                    description_prefix="Analyst 도구 실행 승인 요청",
                 )
             )
-    
-    # 4. Scraper 에이전트 구축: 네비게이팅(5종) + 코딩(6종) = 11개 도구
-    scraper_agent = create_agent(
+
+    # 4. Analyst 에이전트 구축
+    analyst_agent = create_agent(
         model=llm,
-        tools=tools_scraper,
-        system_prompt=SCRAPER_SYSTEM_PROMPT,
+        tools=tools_analyst,
+        system_prompt=ANALYST_SYSTEM_PROMPT,
         middleware=middleware,
         checkpointer=checkpointer,
-        context_schema=AgentContext
+        context_schema=AgentContext,
     )
-    return scraper_agent
+    return analyst_agent
+

@@ -1,15 +1,16 @@
 """
 ===============================================================================
-[AAWS Agent] Analyst — 데이터 분석·시각화·보고서 전문 에이전트
+[AAWS Agent] Scraper — 사이트 분석 + 크롤링 코드 생성/실행 + 데이터 수집
 ===============================================================================
-데이터 파일(JSON/CSV/Excel 등)을 분석하고, 차트/그래프를 생성하며,
-전문적인 Excel 보고서와 인터랙티브 HTML 대시보드를 생성합니다.
+Navigator(사이트 분석) + Coder(코드 생성/실행) 기능을 통합한 전문 서브 에이전트.
+동일 컨텍스트에서 사이트 분석 → 셀렉터 결정 → 스크립트 작성 → 실행 → 검증까지 수행.
 
-아키텍처:
-  🔬 Analyst (이 파일)
-   ├── Analysis Tools: data_profiler, data_query, chart_generator
-   ├── Output Tools: file_converter, excel_writer, html_report
-   └── Common Tools: file_read, file_writer, file_edit, grep_search, glob_search, bash_command
+패키지 구조:
+  app/agents/scraper/
+   ├── agent.py      (에이전트 조립 및 팩토리)
+   ├── prompt.py     (SCRAPER_SYSTEM_PROMPT 및 6단계 워크플로우 규약)
+   ├── tools.py      (14종 네비게이팅 및 코딩 도구 바인딩)
+   └── skills/       (anti_bot_stealth, api_reverse_engineering)
 ===============================================================================
 """
 
@@ -20,13 +21,14 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
 from app.utils import init_chat_model
-from app.prompts import ANALYST_SYSTEM_PROMPT
-from app.tools import tools_analyst
 from app.utils.context import AgentContext
 
+from .prompt import SCRAPER_SYSTEM_PROMPT
+from .tools import tools_scraper
+
 AGENT_METADATA = {
-    "name": "analyst",
-    "description": "데이터 분석·시각화·보고서 전문 에이전트 — 데이터 프로파일링, 차트 생성, Excel/HTML 보고서를 생성합니다.",
+    "name": "scraper",
+    "description": "사이트 분석 + 크롤링 코드 생성/실행 + 데이터 수집을 수행하는 Scraper 에이전트",
 }
 
 
@@ -42,7 +44,7 @@ def _load_config(path: str, default: dict) -> dict:
 
 
 async def create_agent_executor():
-    # 1. LLM 설정
+    # 1. LLM 설정 — Universal Chat Model Factory 기반 gemini-3.7-flash 사용
     llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
 
     # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
@@ -63,18 +65,18 @@ async def create_agent_executor():
             middleware.append(
                 HumanInTheLoopMiddleware(
                     interrupt_on=interrupt_on,
-                    description_prefix="Analyst 도구 실행 승인 요청",
+                    description_prefix="도구 실행 승인 요청",
                 )
             )
 
-    # 4. Analyst 에이전트 구축
-    #    tools_analyst = Analysis(3) + Output(3) + Common(6) = 12종
-    analyst_agent = create_agent(
+    # 4. Scraper 에이전트 구축
+    scraper_agent = create_agent(
         model=llm,
-        tools=tools_analyst,
-        system_prompt=ANALYST_SYSTEM_PROMPT,
+        tools=tools_scraper,
+        system_prompt=SCRAPER_SYSTEM_PROMPT,
         middleware=middleware,
         checkpointer=checkpointer,
         context_schema=AgentContext,
     )
-    return analyst_agent
+
+    return scraper_agent

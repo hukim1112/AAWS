@@ -8,6 +8,7 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage
 from evaluate.scenario_parser import Scenario
 from evaluate.evaluator import evaluate_scenario_result, EvaluationFeedback
+from app.utils import normalize_content
 
 
 class StructuredLogger:
@@ -186,13 +187,15 @@ async def stream_agent_execution(
             
             if event_type == "on_chat_model_stream":
                 chunk = event.get("data", {}).get("chunk")
-                if chunk and hasattr(chunk, "content") and isinstance(chunk.content, str):
-                    print(chunk.content, end="", flush=True)
-                    log_file.write(chunk.content)
-                    log_file.flush()
-                    final_report += chunk.content
-                    if structured_logger:
-                        structured_logger.log_llm_chunk(chunk.content)
+                if chunk and hasattr(chunk, "content"):
+                    chunk_text = normalize_content(chunk.content)
+                    if chunk_text:
+                        print(chunk_text, end="", flush=True)
+                        log_file.write(chunk_text)
+                        log_file.flush()
+                        final_report += chunk_text
+                        if structured_logger:
+                            structured_logger.log_llm_chunk(chunk_text)
                         
             elif event_type == "on_tool_start":
                 tool_input = event.get("data", {}).get("input")
@@ -223,7 +226,35 @@ async def stream_agent_execution(
         if structured_logger and structured_log_path:
             structured_logger.save(structured_log_path)
             
+    # 스트리밍 누락 대비: 상태 히스토리에서 마지막 응답 텍스트 보강
+    if not final_report:
+        try:
+            state = await agent_executor.aget_state(config)
+            messages = state.values.get("messages", [])
+            for msg in reversed(messages):
+                if hasattr(msg, "content") and not getattr(msg, "tool_calls", None):
+                    text = normalize_content(msg.content)
+                    if text:
+                        final_report = text
+                        break
+        except Exception:
+            pass
+
+    # 디스크에 저장된 최신 scraper.py가 있으면 최우선 채택
     best_code = extracted_codes[-1] if extracted_codes else ""
+    run_dir = os.path.dirname(log_path)
+    for fname in ["scraper.py", f"scrape_{scenario_id}.py"]:
+        candidate = os.path.join(run_dir, fname)
+        if os.path.exists(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    disk_code = f.read()
+                    if disk_code.strip():
+                        best_code = disk_code
+                        break
+            except Exception:
+                pass
+
     return final_report, best_code
 
 

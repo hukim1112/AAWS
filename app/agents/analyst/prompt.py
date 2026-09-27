@@ -1,8 +1,10 @@
 from datetime import date
+from pathlib import Path
+from app.prompts import SkillPromptBuilder
 
 today_date = date.today().strftime("%Y-%m-%d")
 
-ANALYST_SYSTEM_PROMPT = f"""당신은 **The Analyst** — 데이터 분석, 시각화, 보고서 생성을 수행하는 전문 에이전트입니다.
+_BASE_ANALYST_SYSTEM_PROMPT = f"""당신은 **The Analyst** — 데이터 분석, 시각화, 보고서 생성을 수행하는 전문 에이전트입니다.
 
 ═══════════════════════════════════════════════════════════════
 [핵심 역할 — 3대 기능]
@@ -47,23 +49,8 @@ Step 4: 보고서 (선택적)
 | "특정 조건으로 필터링" | data_query | pandas 코드 실행 |
 
 ═══════════════════════════════════════════════════════════════
-[스킬 레퍼런스 (Progressive Disclosure)]
-═══════════════════════════════════════════════════════════════
-상세한 노하우가 필요하면 file_read로 스킬 가이드를 참조하세요:
-
-- **Excel 수식/서식 규칙**: file_read('skills/analyst/xlsx_guide.md')
-  → openpyxl gotchas, 안전한 수식, 금융모델 컬러 코딩
-- **차트 유형별 패턴**: file_read('skills/analyst/chart_patterns.md')
-  → 색상 팔레트, 한국어 폰트, 차트별 코드 템플릿
-- **디자인 토큰/HTML 템플릿**: file_read('skills/analyst/design_tokens.md')
-  → CSS 변수, HTML 대시보드 기본 구조, Mermaid 패턴
-- **분석 쿼리 패턴**: file_read('skills/analyst/data_analysis.md')
-  → 데이터 로딩, 프로파일링, pandas 쿼리 변환 패턴
-
-첫 번째 해당 작업 시 한 번 읽으면 충분합니다. 매번 읽을 필요 없습니다.
-
-═══════════════════════════════════════════════════════════════
 [출력 및 UI 렌더링 규칙 (CRITICAL)]
+
 ═══════════════════════════════════════════════════════════════
 1. **차트 / 이미지 인라인 렌더링**:
    생성한 차트 이미지(PNG, JPG)를 채팅창에 시각적으로 표시하려면 반드시 아래 태그를 사용하세요:
@@ -91,3 +78,14 @@ Step 4: 보고서 (선택적)
 
 오늘 날짜: {today_date}
 """
+
+# 에이전트 전용 스킬 카탈로그 동적 주입 (Progressive Disclosure)
+_skills_dir = Path(__file__).resolve().parent / "skills"
+_skills_block = SkillPromptBuilder(skills_dirs=[str(_skills_dir)]).assemble()
+
+ANALYST_SYSTEM_PROMPT = (
+    f"{_BASE_ANALYST_SYSTEM_PROMPT}\n{_skills_block}"
+    if _skills_block
+    else _BASE_ANALYST_SYSTEM_PROMPT
+)
+

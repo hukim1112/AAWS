@@ -2,23 +2,26 @@
 
 본 미션은 `notebooks/4_MultiAgent_Orchestration.ipynb`에서 학습한 **Supervisor & Worker (Agent-as-Tool) 멀티에이전트 오케스트레이션 패턴**을 실제 프로덕션 서버에 구현하는 실습 과제입니다.
 
-노트북에서 배운 **`invoke_sub_agent` 도구 규격(Pydantic 스키마, `target_file_list`, `[TASK REPORT]` 반환 프로토콜)**을 그대로 적용하여 `app/agents/supervisor.py`를 완성하고, **Chainlit Chat UI에서 Supervisor에게 웹 데이터 수집을 지시하여 Scraper가 자율 수집해오는 전체 협업 파이프라인을 성공시키는 것**이 최종 목표입니다.
+노트북에서 배운 **`invoke_sub_agent` 도구 규격(Pydantic 스키마, `target_file_list`, `[TASK REPORT]` 반환 프로토콜)**을 적용하여 **`app/agents/supervisor/` 패키지 (`tools.py`, `prompt.py`, `agent.py`)**를 완성하고, **Chainlit Chat UI에서 Supervisor에게 웹 데이터 수집을 지시하여 Scraper가 자율 수집해오는 전체 협업 파이프라인을 성공시키는 것**이 최종 목표입니다.
 
 ---
 
 ## 📂 실습 대상 및 핵심 파일
 * **사전 학습 노트북**: `notebooks/4_MultiAgent_Orchestration.ipynb`
-* **멀티에이전트 구축 대상 파일**: `app/agents/supervisor.py` (직접 구현)
-* **하위 전문 에이전트 / 도구**: `app/agents/scraper.py` / `app/tools`
+* **멀티에이전트 구축 대상 패키지**: `app/agents/supervisor/` (직접 구현)
+  - `tools.py`: `InvokeSubAgentInput` 스키마, `invoke_sub_agent` 도구 구현 및 `tools_supervisor` 바인딩
+  - `prompt.py`: 원칙 중심의 `SUPERVISOR_SYSTEM_PROMPT` 작성
+  - `agent.py`: `create_agent_executor()` 팩토리 함수 작성
+  - `__init__.py`: `AGENT_METADATA` 및 `create_agent_executor` 노출
+* **하위 전문 에이전트 / 도구**: `app/agents/scraper/` / `app/tools`
 * **계획 및 태스크 도구**: `app/tools/plan.py` (`enter_plan`, `task_create`, `task_list`, `task_update`, `exit_plan`)
 * **공용 파일 도구**: `app/tools/common.py`
-* **시스템 프롬프트**: `app/prompts/`
 
 ---
 
 ## 📋 미션 목표
 1. **[노트북 학습]**: `notebooks/4_MultiAgent_Orchestration.ipynb`를 실행하며 정보 격리(Context Isolation), 5대 협업 프로토콜, Planning 도구 및 `invoke_sub_agent` 패턴을 완벽히 이해합니다.
-2. **[Supervisor 에이전트 구현]**: 노트북의 `InvokeSubAgentInput` Pydantic 스키마와 `invoke_sub_agent` 도구를 그대로 탑재한 `app/agents/supervisor.py`를 작성합니다.
+2. **[Supervisor 패키지 구현]**: 노트북의 `InvokeSubAgentInput` Pydantic 스키마와 `invoke_sub_agent` 도구를 `app/agents/supervisor/tools.py`에 구현하고, `prompt.py`와 `agent.py`를 완성합니다.
 3. **[서버 & Chat UI 연동]**: FastAPI 서버와 Chainlit UI를 띄워 `supervisor` 프로필이 정상 등록되는지 확인합니다.
 4. **[멀티에이전트 오케스트레이션 검증]**: Chat UI에서 사용자로서 Supervisor에게 데이터 수집을 요청하고, Supervisor가 계획을 세워 `invoke_sub_agent`로 Scraper에게 위임한 뒤 최종 결과 요약을 보고하는지 확인합니다.
 
@@ -44,39 +47,35 @@
 
 ---
 
-### 2단계: `app/agents/supervisor.py` 구현하기
+### 2단계: `app/agents/supervisor/` 패키지 구현하기
 
-> 💡 **[안내] 테스트 및 코드 수정 권장**:
-> 아래에 제공된 코드는 여러분의 구현을 돕기 위한 **참고용 예시 코드(Reference Implementation)**입니다.
-> 그대로 사용하기보다는, **직접 서버와 Chat UI에서 테스트를 돌려보며 시스템 프롬프트, 위임 로직, 파라미터 등을 필요에 맞게 능동적으로 수정하고 튜닝**해 보세요!
+> 💡 **[안내] 패키지 구조 및 역할 분리**:
+> 에이전트 아키텍처 원칙에 따라 Supervisor는 `app/agents/supervisor/` 폴더 내에 3개의 모듈로 깔끔하게 분리되어 있습니다:
+> - **`tools.py`**: 하위 에이전트를 호출하는 `invoke_sub_agent` 도구 구현 및 `tools_supervisor` 목록 정의
+> - **`prompt.py`**: 오케스트레이션 4대 원칙을 담은 `SUPERVISOR_SYSTEM_PROMPT` 작성
+> - **`agent.py`**: LLM, 체크포인터, 도구, 프롬프트를 바인딩하는 `create_agent_executor()` 팩토리 함수 작성
 
-`app/agents/supervisor.py` 파일을 생성하고, 노트북의 `invoke_sub_agent` 도구 패턴을 반영하여 아래와 같이 작성합니다:
+---
+
+#### 2-1. `app/agents/supervisor/tools.py` 구현
+
+`app/agents/supervisor/tools.py`를 열어 노트북의 `invoke_sub_agent` 도구 패턴을 반영하여 아래와 같이 작성합니다:
 
 ```python
-# app/agents/supervisor.py
+# app/agents/supervisor/tools.py
 
 import os
-import json
 import asyncio
 from typing import List
 from pydantic import BaseModel, Field
-import aiosqlite
 
 from langchain_core.tools import tool
-from langchain.agents import create_agent
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain_core.messages import HumanMessage
 
-from app.utils import init_chat_model, normalize_content
-from app.utils.context import AgentContext
+from app.utils import normalize_content
 from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update
-from app.tools.common import file_read, file_writer, glob_search, grep_search
+from app.tools.common import file_read, file_writer, glob_search, grep_search, file_edit, web_search
 from app.agents.scraper import create_agent_executor as create_scraper_executor
-
-AGENT_METADATA = {
-    "name": "supervisor",
-    "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트"
-}
 
 # =============================================================================
 # 1. invoke_sub_agent Pydantic 스키마 및 도구 정의
@@ -114,7 +113,6 @@ async def invoke_sub_agent(task_instruction: str, target_file_list: List[str] = 
     file_list_str = ", ".join(target_file_list) if target_file_list else "None"
     
     # 🌟 [3-Layer Architecture] 범용 Sub-Agent Protocol Overlay 주입
-    # (특정 도메인을 하드코딩하지 않고, 침묵 실행/계획 참조 및 단일 수정자 원칙/블로커/보고서 규약만 주입)
     prompt = f"""[SUB-AGENT MODE - STRICT PROTOCOL]
 You are operating as a sub-agent under a Main Agent. You MUST follow these rules:
 1. NO greetings or conversational responses. Execute the task immediately.
@@ -142,12 +140,34 @@ Instruction: {task_instruction}"""
     
     return normalize_content(response["messages"][-1].content)
 
-
 # =============================================================================
-# 2. Supervisor 시스템 프롬프트 정의 (원칙 중심 프롬프팅: Principle-over-Micromanagement)
+# 2. Supervisor 도구 바인딩 목록
 # =============================================================================
 
-SUPERVISOR_SYSTEM_PROMPT = """당신은 사용자의 요청을 편안하게 도와드리는 유능한 AI 어시스턴트입니다.
+tools_supervisor = [
+    # Planning & Task Board (5종)
+    enter_plan, exit_plan, task_create, task_list, task_update,
+    # Sub-Agent Invocation (1종)
+    invoke_sub_agent,
+    # Common File / Search Tools (6종)
+    file_read, file_writer, file_edit, glob_search, grep_search, web_search,
+]
+```
+
+---
+
+#### 2-2. `app/agents/supervisor/prompt.py` 구현
+
+`app/agents/supervisor/prompt.py`를 열어 원칙 중심의 시스템 프롬프트를 완성합니다:
+
+```python
+# app/agents/supervisor/prompt.py
+
+from datetime import date
+
+today_date = date.today().strftime("%Y-%m-%d")
+
+SUPERVISOR_SYSTEM_PROMPT = f"""당신은 사용자의 요청을 편안하게 도와드리는 유능한 AI 어시스턴트입니다.
 질문에 답하고, 정보를 검색하고, 코드를 작성하고, 파일을 다루는 등 다양한 범용 작업을 직접 수행합니다.
 필요한 경우에는 전문 에이전트를 활용하여 웹 데이터 수집 같은 복잡한 작업도 해결합니다.
 
@@ -174,16 +194,40 @@ SUPERVISOR_SYSTEM_PROMPT = """당신은 사용자의 요청을 편안하게 도�
 
 - 친근하고 명확한 어조로 답변하며, 불필요한 장황한 설명보다는 결과 중심으로 답변하세요.
 - 수집된 데이터나 상세 산출물은 파일(artifacts/)로 저장하고, 사용자에게는 핵심 요약과 파일 경로를 깔끔하게 전달하세요.
+
+오늘의 날짜: {today_date}
 """
+```
 
+---
 
-# =============================================================================
-# 3. Supervisor 에이전트 팩토리 함수
-# =============================================================================
+#### 2-3. `app/agents/supervisor/agent.py` 구현
+
+`app/agents/supervisor/agent.py`를 열어 에이전트 팩토리 함수를 구현합니다:
+
+```python
+# app/agents/supervisor/agent.py
+
+import os
+import aiosqlite
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langchain.agents import create_agent
+
+from app.utils import init_chat_model
+from app.utils.context import AgentContext
+from .prompt import SUPERVISOR_SYSTEM_PROMPT
+from .tools import tools_supervisor
+
+AGENT_METADATA = {
+    "name": "supervisor",
+    "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트"
+}
 
 async def create_agent_executor():
+    # 1. LLM 초기화
     llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
     
+    # 2. AsyncSqliteSaver 체크포인터 설정
     db_dir = "app/database"
     os.makedirs(db_dir, exist_ok=True)
     checkpoints_path = os.path.join(db_dir, "checkpoints.db")
@@ -192,15 +236,10 @@ async def create_agent_executor():
     checkpointer = AsyncSqliteSaver(conn)
     await checkpointer.setup()
     
-    tools = [
-        enter_plan, exit_plan, task_create, task_list, task_update,
-        invoke_sub_agent,
-        file_read, file_writer, glob_search, grep_search
-    ]
-    
+    # 3. Supervisor 에이전트 생성
     supervisor_agent = create_agent(
         model=llm,
-        tools=tools,
+        tools=tools_supervisor,
         system_prompt=SUPERVISOR_SYSTEM_PROMPT,
         checkpointer=checkpointer,
         context_schema=AgentContext
@@ -252,7 +291,7 @@ http://quotes.toscrape.com 사이트에서 1~2페이지의 명언(text, author, 
 
 ## ✅ 성공 검증 체크리스트
 - [ ] `notebooks/4_MultiAgent_Orchestration.ipynb`를 확인하고 원칙 중심 프롬프팅 및 `invoke_sub_agent` 규약을 이해했는가?
-- [ ] `app/agents/supervisor.py`에 원칙 중심의 `SUPERVISOR_SYSTEM_PROMPT`와 `invoke_sub_agent` 도구가 정확히 구현되었는가?
+- [ ] `app/agents/supervisor/` 패키지의 `tools.py`, `prompt.py`, `agent.py`가 정확히 구현되었는가?
 - [ ] Chainlit UI에서 `supervisor` 프로필이 정상적으로 나타나고 선택 가능한가?
 - [ ] Supervisor가 `invoke_sub_agent`로 Scraper에게 작업을 위임하여 실제 `artifacts/data/quotes_multiagent.json` 파일이 생성되었는가?
 - [ ] 전체 멀티에이전트 실행 루프가 에러 없이 성공적으로 마무리되었는가?
