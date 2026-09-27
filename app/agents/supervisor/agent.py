@@ -37,12 +37,12 @@ def _load_config(path: str, default: dict) -> dict:
 # =============================================================================
 # TODO: missions/03_missions.md [2단계]를 참고하여
 #       async def create_agent_executor() 함수를 구현하세요.
-#       1. init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+#       1. init_chat_model(model="gemini-3.8-flash", temperature=0.0)
 #       2. AsyncSqliteSaver 체크포인터 설정 (app/database/checkpoints.db)
 #       3. create_agent(model=llm, tools=tools_supervisor, system_prompt=SUPERVISOR_SYSTEM_PROMPT, ...)
 #       (create_agent_executor 함수가 정의되면 FastAPI 서버와 Chainlit UI에서 자동으로 감지됩니다.)
 
 # async def create_agent_executor():
-#     llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+#     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
 #     ...
 #     return supervisor_agent

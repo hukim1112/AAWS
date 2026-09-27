@@ -34,8 +34,8 @@ def _load_config(path: str, default: dict) -> dict:
     return default
 
 async def create_agent_executor():
-    # 1. 일원화된 utils의 Universal Chat Model Factory를 활용하여 Gemini 3.7 Flash 모델 초기화
-    llm = init_chat_model(model="gemini-3.7-flash", temperature=0.0)
+    # 1. 일원화된 utils의 Universal Chat Model Factory를 활용하여 Gemini 3.8 Flash 모델 초기화
+    llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
     
     # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
     db_dir = "app/database"

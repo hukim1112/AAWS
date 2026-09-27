@@ -341,7 +341,7 @@ async def evaluate_scenario_result(scenario, json_output_path, agent_code, agent
     schema_pass, schema_msg = validate_schema(data, scenario.expected_schema)
     
     # 2. LLM-as-a-Judge 전략 평가
-    eval_model = init_chat_model("gemini-3.7-flash", temperature=0.0)
+    eval_model = init_chat_model("gemini-3.8-flash", temperature=0.0)
     structured_evaluator = eval_model.with_structured_output(EvaluationFeedback)
     
     prompt = ChatPromptTemplate.from_messages([
