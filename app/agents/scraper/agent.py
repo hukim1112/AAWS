@@ -21,7 +21,7 @@ from langchain.agents import create_agent
 from app.utils import init_chat_model
 from app.utils.context import AgentContext
 
-from app.prompts.skill_middleware import SkillCatalogMiddleware
+from app.middleware import SkillCatalogMiddleware
 from .prompt import BASE_SCRAPER_SYSTEM_PROMPT, get_skill_prompt_builder
 from .tools import tools_scraper
 

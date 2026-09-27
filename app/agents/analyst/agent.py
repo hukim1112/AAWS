@@ -18,7 +18,7 @@ import os
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
-from app.prompts.skill_middleware import SkillCatalogMiddleware
+from app.middleware import SkillCatalogMiddleware
 from app.utils import init_chat_model
 from app.utils.context import AgentContext
 
