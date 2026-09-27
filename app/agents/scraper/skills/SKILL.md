@@ -1,24 +1,15 @@
 ---
-name: scraper-advanced-skills
-description: Advanced web scraping playbooks for anti-bot detection bypass, network API reverse engineering, and dynamic DOM diagnosis.
+name: scraper-basic-skills
+description: Basic troubleshooting references for blocked requests, embedded data and APIs, and missing or dynamic page content.
 license: Apache-2.0
 ---
 
-# Scraper Advanced Skill Hub
+# Scraper 문제 해결 참고 자료
 
-This skill package provides specialized, on-demand troubleshooting playbooks for complex scraping scenarios where standard static/dynamic DOM parsing fails (anti-bot protection, obfuscated SPAs, dynamic hydration, nested iframes).
+작업 중 아래 상황을 만나면 해당 문서의 사례와 예제를 참고한다. 전체 스킬 목록과 읽기 경로는 카탈로그에 있다.
 
-## Skill Structure & Progressive Disclosure
-
-Choose a playbook when the task requirements or observed page behavior match its scope. Read its entrypoint before applying it:
-
-| Obstacle / Trigger Signal | Guide File | Key Strategies & Patterns |
-|---|---|---|
-| **Zero selector matches (0 items) / Empty extraction** | `app/agents/scraper/skills/dynamic_content_diagnosis.md` | Decision tree: hydration delay, `<iframe>` isolation, Shadow DOM, lazy loading, virtual DOM escalation |
-| **Bot detection / Cloudflare / 403 Forbidden / 429** | `app/agents/scraper/skills/anti_bot_stealth.md` | Playwright stealth launch flags, `navigator.webdriver` masking, header spoofing, randomized delay, session warm-up |
-| **Obfuscated DOM / Next.js SSR / Hidden JSON API** | `app/agents/scraper/skills/api_reverse_engineering.md` | Pre-flight `__NEXT_DATA__` extraction, Playwright network request sniffing (XHR/Fetch), high-speed direct API collection |
-
-## Operating Principles
-1. **Evidence-Based Selection**: Use the default DOM workflow when appropriate. API or embedded-data playbooks may replace DOM analysis when observations support that strategy.
-2. **Progressive Loading**: Read relevant playbooks and their required references only. New skills are listed in the catalog automatically; this table is not an exhaustive registry.
-3. **Bounded Recovery**: Apply a relevant skill to recoverable failures within the task budget. Report missing authorization, required human intervention, or exhausted recovery attempts to the supervisor.
+| 필요한 맥락 | 참고 문서 |
+|---|---|
+| 브라우저에서는 보이지만 코드에서 로그인 화면·403 반환, 429 또는 CAPTCHA 발생 | [anti_bot_stealth.md](anti_bot_stealth.md) |
+| HTML에 내장된 JSON이나 목록을 제공하는 네트워크 응답을 이용한 수집 | [api_reverse_engineering.md](api_reverse_engineering.md) |
+| 셀렉터 결과가 비어 있음, iframe·Shadow DOM, 스크롤해도 일정한 DOM 항목 수 | [dynamic_content_diagnosis.md](dynamic_content_diagnosis.md) |

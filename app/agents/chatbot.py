@@ -35,16 +35,12 @@ async def create_agent_executor():
     checkpointer = AsyncSqliteSaver(conn)
     await checkpointer.setup()
     
-    # 3. 미들웨어 파이프라인
-    middleware = []
-    
-    # 4. 범용 8대 도구가 탑재된 스마트 챗봇 에이전트 구축
+    # 3. 범용 8대 도구가 탑재된 스마트 챗봇 에이전트 구축
     chatbot_agent = create_agent(
         model=llm,
         tools=tools_chatbot,
         system_prompt=CHATBOT_SYSTEM_PROMPT,
-        middleware=middleware,
         checkpointer=checkpointer,
-        context_schema=AgentContext
+        context_schema=AgentContext,
     )
     return chatbot_agent

@@ -1,79 +1,35 @@
 ---
-name: anti_bot_stealth
-description: Bypass bot detection, Cloudflare Turnstile, 403 Forbidden, User-Agent filtering, and apply Playwright stealth patterns.
+name: anti-bot-recovery
+description: Use when browser access works but script requests fail, or when HTTP 429 and challenge pages interrupt collection.
 ---
 
-# 🛡️ Anti-Bot Detection Bypass & Headless Stealth Playbook
+# 세션 차이와 차단 응답의 진단 사례
 
-When automated browsers (Headless Chrome, Playwright, Puppeteer) trigger `403 Forbidden`, Cloudflare Turnstile, CAPTCHAs, or empty/blocked pages, apply the evasion patterns below.
+## 브라우저에서는 보이는데 수집 코드는 로그인 화면을 받는 경우
 
----
+`browse_web`으로 로그인한 뒤 `requests.get()`을 실행하면 브라우저의 로그인 쿠키가 자동으로 전달되지 않는다. 같은 URL이어도 로그인 HTML, 리다이렉트, 401/403 등 다른 응답을 받을 수 있다.
 
-## 1. Primary Bot Detection Signals & Diagnosis
+먼저 브라우저와 코드의 최종 URL·응답 본문을 비교한다. 코드만 로그인 화면을 받는다면 브라우저 세션과 요청 조건의 차이를 확인할 근거가 된다. 403만으로 봇 탐지라고 확정할 수는 없다.
 
-1. **`navigator.webdriver === true`**: Default headless Chromium flags expose this property directly to JavaScript.
-2. **Abnormal / Missing Request Headers**: `User-Agent` containing `HeadlessChrome`, missing `Sec-Ch-Ua`, or absent `Accept-Language` headers.
-3. **Machine Request Velocity**: Unthrottled requests trigger automated rate limiters (HTTP 429).
-4. **Session Cold Starts**: Direct requests to deep detail URLs without visiting the root domain or establishing session cookies.
+기존 탭의 `page.context.request`는 해당 컨텍스트의 쿠키를 공유한다. 다만 페이지 JavaScript가 붙인 `Authorization`·CSRF 헤더까지 복제하지는 않으므로, 실제로 성공한 요청과 비교해야 한다. 기존 Chrome에 연결하는 예제는 [API 스킬](api_reverse_engineering.md)에 있다.
 
----
+별도 스크립트에서 새 브라우저를 띄우거나 `PlaywrightManager`를 생성하면 기존 프로세스의 로그인 탭이 자동으로 이어지는 것은 아니다. 이 상황에서는 브라우저를 새로 만드는 것보다 기존 세션에 연결하는 접근이 적합하다.
 
-## 2. Playwright Stealth Configuration
+## 연속 조회 후 429가 반환되는 경우
 
-Apply the following setup to launch Playwright with realistic browser fingerprints and CDP-level property overrides:
+예를 들어 다음 응답은 재시도까지 120초를 기다리라는 뜻이다.
 
-```python
-import asyncio
-from playwright.async_api import async_playwright
-
-async def run_stealth_crawler():
-    async with async_playwright() as p:
-        # 1. Disable automation flags
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-infobars"
-            ]
-        )
-        
-        # 2. Emulate realistic desktop context
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080},
-            locale="en-US",
-            timezone_id="America/New_York"
-        )
-        
-        page = await context.new_page()
-        
-        # 3. Mask navigator.webdriver & inject chrome runtime
-        await page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-            window.chrome = { runtime: {} };
-        """)
-        
-        # 4. Safe navigation with timeout
-        await page.goto("https://target-site.com", wait_until="networkidle", timeout=30000)
-        await asyncio.sleep(2)  # Extra grace period for hydration
-        
-        content = await page.content()
-        await browser.close()
-        return content
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 120
 ```
 
----
+1~3초의 무작위 지연만 추가하면 이 대기 조건을 충족하지 못한다. 작업 시간 안에서 기다릴 수 있다면 지정된 시간 이후에 요청 하나로 회복 여부를 확인하고, 후속 요청 속도도 낮춘다. 기다릴 수 없다면 수집한 지점과 필요한 대기 시간을 남긴다.
 
-## 3. Session Warm-Up & Adaptive Rate Limiting
+`Retry-After`가 HTTP 날짜이면 그 시각까지의 대기 시간으로 해석한다. 헤더가 없으면 요청 간격을 늘리는 방식으로 복구를 시도할 수 있지만, 성공이 보장되지는 않는다.
 
-1. **Randomized Delay (Jitter)**:
-   ```python
-   import random, time
-   time.sleep(random.uniform(1.5, 3.5))
-   ```
+## 브라우저에도 권한·CAPTCHA 화면이 나타나는 경우
 
-2. **Session Warm-Up**:
-   Always navigate to the home/landing page (`https://target-site.com/`) first to obtain valid initial cookies and tokens before requesting deep endpoints or internal queries.
+응답이 200이어도 실제 본문이 로그인·차단 안내라면 수집 데이터가 아니다. 권한 부족, 세션 만료, 사람의 확인이 필요한 화면을 구분한다. CAPTCHA·2FA 때문에 진행할 수 없다면 현재 탭을 보존하고 필요한 개입을 보고한다.
+
+User-Agent나 자동화 플래그 변경만으로 권한이나 CAPTCHA 문제가 해결된다고 가정할 근거는 없다. 해당 응답의 원인을 확인할 수 없는 경우에는 관찰한 상태와 시도 결과를 바탕으로 중단 여부를 판단한다.
