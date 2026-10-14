@@ -1375,17 +1375,19 @@ async def browse_web(task: str, url: str = "", max_steps: int = 15, tab_id: str 
                 full_task += (
                     f"[현재 공유 탭]\n{page.url}\n"
                     f"[작업]\n현재 탭의 상태에서 다음을 수행하세요: {task}\n"
-                    "입력값·스크롤·로그인 상태를 유지하고, 작업에 필요한 경우에만 이동하거나 새로고침하세요. "
-                    "작업 완료 후에도 후속 분석을 위해 마지막 탭을 열어 두세요."
+                    "- 새 탭(new_tab=True)을 열지 말고 반드시 현재 탭(new_tab=False)에서 이동·작업하세요.\n"
+                    "- 입력값·스크롤·로그인 상태를 유지하고, 작업에 필요한 경우에만 이동하거나 새로고침하세요.\n"
+                    "- 작업 완료 후에도 후속 분석을 위해 현재 탭을 닫지 말고 열어 두세요."
                 )
                 
-                # 5. Agent 실행
+                # 5. Agent 실행 (이미 PlaywrightManager가 탭 포커스 및 초기 이동을 처리했으므로 directly_open_url=False)
                 agent = Agent(
                     task=full_task,
                     llm=llm,
                     browser_session=browser_session,
                     use_vision=True,
                     max_actions_per_step=3,
+                    directly_open_url=False,
                 )
                 history = await agent.run(max_steps=max_steps)
                 
