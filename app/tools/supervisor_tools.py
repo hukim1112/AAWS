@@ -143,9 +143,8 @@ class InvokeSubAgentInput(BaseModel):
     target_file_list: List[str] = Field(
         default_factory=list,
         description=(
-            "List of relative file paths the sub-agent should inspect or create "
-            "(e.g. ['artifacts/data/quotes.json']). "
-            "These define where the sub-agent stores its output artifacts."
+            "List of relative file paths the sub-agent should inspect or create. "
+            "These define where the sub-agent reads input context or stores its output artifacts."
         )
     )
     subagent_role: str = Field(
