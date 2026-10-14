@@ -196,6 +196,7 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
                 f"[SYSTEM NOTIFICATION: BACKGROUND TASK COMPLETED]\n"
                 f"- Job ID: {job_id}\n"
                 f"- Sub-Agent: {agent_name}\n"
+                f"- Sub-Thread ID: {input_data.thread_id} (use sub_thread_id='{input_data.thread_id}' to continue this agent)\n"
                 f"- Report Content:\n{task_report}\n\n"
                 f"[INSTRUCTION FOR SUPERVISOR]\n"
                 f"위 서브에이전트의 완료 보고서와 생성된 산출물을 바탕으로 다음 작업을 수행하거나 유저에게 답변합니다 "
@@ -203,16 +204,17 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
             )
 
             cb_config = {"configurable": {"thread_id": cb_thread_id}, "recursion_limit": 100}
-            add_message(cb_thread_id, "user", trigger_prompt)
-
-            sup_result = await cb_executor.ainvoke(
-                {"messages": [("user", trigger_prompt)]},
-                config=cb_config,
-                context=context_obj
-            )
-            sup_response = sanitize_text(normalize_content(sup_result["messages"][-1].content))
-            add_message(cb_thread_id, "assistant", sup_response)
-            job["supervisor_response"] = sup_response
+            cb_lock = wakeup_locks.setdefault(cb_thread_id, asyncio.Lock())
+            async with cb_lock:
+                add_message(cb_thread_id, "user", trigger_prompt)
+                sup_result = await cb_executor.ainvoke(
+                    {"messages": [("user", trigger_prompt)]},
+                    config=cb_config,
+                    context=context_obj
+                )
+                sup_response = sanitize_text(normalize_content(sup_result["messages"][-1].content))
+                add_message(cb_thread_id, "assistant", sup_response)
+                job["supervisor_response"] = sup_response
 
     except Exception as e:
         job["status"] = "FAILED"
@@ -225,9 +227,12 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
 
 ## 5. 통합 확장형 도구 인터페이스 — `invoke_sub_agent` & `get_sub_agent_job_status`
 
-### 도구 분리 vs 단일 도구 확장
+### 도구 분리 vs 단일 도구 확장 & 세션 격리(`sub_thread_id`)
 
-도구를 `invoke_sync`와 `invoke_async`로 쪼개면 LLM이 도구 선택에 혼란을 겪습니다. 하나의 `invoke_sub_agent`에 `run_in_background: bool = False` 파라미터를 추가하여 통합했습니다:
+도구를 `invoke_sync`와 `invoke_async`로 쪼개면 LLM이 도구 선택에 혼란을 겪습니다. 하나의 `invoke_sub_agent`에 `run_in_background: bool = False`와 선택적 `sub_thread_id: Optional[str] = None` 파라미터를 통합했습니다:
+
+- **기본 호출 (`sub_thread_id=None`)**: 호출마다 고유한 `sub_thread_id` (`{supervisor_tid}_{subagent_role}_{uuid8}`)를 자동 생성합니다. 덕분에 한 세션에서 여러 `scraper`를 동시에 호출해도 각 서브에이전트의 단기 메모리(Checkpointer)가 섞이지 않고 완벽히 격리됩니다.
+- **연속 작업 (`sub_thread_id` 전달)**: 도구 반환값이나 완료 알림에 포함된 `Sub-Thread ID`를 `sub_thread_id` 인자로 다시 전달하면, 해당 서브에이전트의 기존 Checkpointer 세션을 그대로 이어받아 후속 지시나 `[BLOCKER]` 복구를 수행합니다.
 
 ```python
 class InvokeSubAgentInput(BaseModel):
@@ -241,6 +246,13 @@ class InvokeSubAgentInput(BaseModel):
             "excel report, web scraping) to run asynchronously in the background."
         )
     )
+    sub_thread_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional session ID (Sub-Thread ID) of a previously invoked sub-agent to continue its work "
+            "with preserved short-term memory. Leave None when starting a new task or running in parallel."
+        )
+    )
 
 @tool(args_schema=InvokeSubAgentInput)
 async def invoke_sub_agent(
@@ -248,6 +260,7 @@ async def invoke_sub_agent(
     target_file_list: List[str] = [],
     subagent_role: str = "scraper",
     run_in_background: bool = False,
+    sub_thread_id: Optional[str] = None,
     runtime: ToolRuntime = None,
 ) -> str:
     # ToolRuntime에서 Supervisor의 thread_id 추출
@@ -255,15 +268,25 @@ async def invoke_sub_agent(
     if runtime and runtime.execution_info and runtime.execution_info.thread_id:
         supervisor_tid = runtime.execution_info.thread_id
 
-    sub_thread_id = f"{supervisor_tid}_{subagent_role}"
     client = AsyncAgentClient(base_url="http://localhost:8000", timeout=600.0)
+
+    # 새 작업이면 고유 sub_thread_id 자동 생성, 연속 작업이면 전달받은 sub_thread_id 재사용
+    if sub_thread_id and sub_thread_id.strip():
+        resolved_sub_tid = sub_thread_id.strip()
+        prior_messages = await client.get_messages(resolved_sub_tid)
+        is_first_call = len(prior_messages) == 0
+    else:
+        resolved_sub_tid = f"{supervisor_tid}_{subagent_role}_{uuid.uuid4().hex[:8]}"
+        is_first_call = True
+
+    message = _build_subagent_message(task_instruction, target_file_list, is_first_call)
 
     # 1. 백그라운드 모드 분기
     if run_in_background:
         job_res = await client.submit_job(
             agent_name=subagent_role,
             message=message,
-            thread_id=sub_thread_id,
+            thread_id=resolved_sub_tid,
             callback_agent="supervisor",
             callback_thread_id=supervisor_tid,
         )
@@ -272,6 +295,7 @@ async def invoke_sub_agent(
             f"[JOB SUBMITTED]\n"
             f"- Job ID: {job_id}\n"
             f"- Sub-Agent: {subagent_role}\n"
+            f"- Sub-Thread ID: {resolved_sub_tid} (use sub_thread_id='{resolved_sub_tid}' to continue this agent)\n"
             f"- Status: RUNNING (Background)\n"
             f"- Tracking: The server will automatically notify and wake you up with full results when this job completes.\n"
             f"Please inform the user that the task has started in the background."
@@ -281,9 +305,13 @@ async def invoke_sub_agent(
     response = await client.async_invoke(
         agent_name=subagent_role,
         message=message,
-        thread_id=sub_thread_id,
+        thread_id=resolved_sub_tid,
     )
-    return response.get("content", "[BLOCKER: Empty response]")
+    content = response.get("content", "[BLOCKER: Empty response]")
+    return (
+        f"{content}\n"
+        f"- Sub-Thread ID: {resolved_sub_tid} (use sub_thread_id='{resolved_sub_tid}' to continue this agent)"
+    )
 ```
 
 ### 상태 조회 도구 (`get_sub_agent_job_status`)

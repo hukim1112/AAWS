@@ -10,7 +10,8 @@ Supervisor 에이전트의 멀티에이전트 오케스트레이션 핵심 도�
 
   invoke_sub_agent: 전문 sub-agent에게 작업을 위임하는 도구.
     - ToolRuntime으로 supervisor thread_id 자동 추출
-    - sub_thread_id = supervisor_tid + "_" + role 로 세션 연속성 보장
+    - 기본 호출(sub_thread_id=None): 호출마다 고유 sub_thread_id 자동 발급으로 동시 호출 시 단기 메모리 완벽 격리
+    - 연속 호출(sub_thread_id 지정): 이전 반환값의 sub_thread_id를 전달하여 해당 자식의 Checkpointer 세션 연속성 보장
     - AsyncAgentClient.get_agents()로 Agent Registry 동적 조회
     - run_in_background=True 지원: 비동기 백그라운드 위임 & Reactive Wakeup
     - 첫 호출: Full Protocol Header 주입 (역할 수립)
@@ -23,7 +24,8 @@ Supervisor 에이전트의 멀티에이전트 오케스트레이션 핵심 도�
 """
 
 import os
-from typing import List
+import uuid
+from typing import List, Optional
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolRuntime
@@ -164,6 +166,15 @@ class InvokeSubAgentInput(BaseModel):
             "and the server will automatically wake up Supervisor when completed."
         )
     )
+    sub_thread_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional session ID (Sub-Thread ID) of a previously invoked sub-agent to continue its work "
+            "with preserved short-term memory (e.g. follow-up instructions or blocker recovery on the same task). "
+            "Leave None (default) when starting a new task or invoking multiple sub-agents in parallel "
+            "so a fresh, isolated sub_thread_id is automatically generated."
+        )
+    )
 
 
 @tool(args_schema=InvokeSubAgentInput)
@@ -172,6 +183,7 @@ async def invoke_sub_agent(
     target_file_list: List[str] = [],
     subagent_role: str = "scraper",
     run_in_background: bool = False,
+    sub_thread_id: Optional[str] = None,
     runtime: ToolRuntime = None,
 ) -> str:
     """Delegates a focused task to a specialized sub-agent running on the server.
@@ -182,6 +194,14 @@ async def invoke_sub_agent(
       Use ONLY for tasks requiring specialized tools not available to Supervisor directly.
       Always check available sub-agents using list_sub_agents() before delegation if unsure.
 
+    SESSION ISOLATION & CONTINUATION (sub_thread_id):
+      - NEW TASK / PARALLEL CALLS (sub_thread_id=None, default):
+        Omit sub_thread_id to automatically generate a fresh, isolated session ID.
+        This guarantees that concurrent or unrelated sub-agent calls never mix short-term memory.
+      - FOLLOW-UP / CONTINUATION (sub_thread_id="<Sub-Thread ID from prior result>"):
+        Pass the Sub-Thread ID returned by a previous call when you want the exact same sub-agent
+        instance to continue its prior work or recover from a [BLOCKER] with its memory preserved.
+
     PROTOCOL — BEFORE CALLING:
       1. Register a task with task_create() to track this delegation.
       2. Set target_file_list to exact output artifact path(s)
@@ -190,7 +210,7 @@ async def invoke_sub_agent(
     PROTOCOL — BACKGROUND EXECUTION (run_in_background=True) [RECOMMENDED DEFAULT FOR SUB-AGENTS]:
       - MUST be used for all data analysis, chart/dashboard creation, Excel writing, and scraping.
       - Even if data already exists, generating charts & dashboards takes multiple tool steps (>1 min).
-      - Returns immediately with [JOB SUBMITTED].
+      - Returns immediately with [JOB SUBMITTED] including Job ID and Sub-Thread ID.
       - Inform the user that the background job has started (with Job ID).
       - When finished, the server will automatically notify and wake you up with full results to continue.
 
@@ -202,13 +222,14 @@ async def invoke_sub_agent(
           → Call task_update(task_id, 'BLOCKED').
           → Inspect the cause, previous recovery attempts, preserved artifacts,
             and remaining budget. Delegate a fallback only when new evidence
-            and budget support it; do not reset attempts on follow-up calls.
+            and budget support it (pass the same sub_thread_id if continuing the same attempt history);
+            do not reset attempts on follow-up calls.
           → Report missing authorization/credentials, required human intervention,
             or exhausted recovery to the user with the required next step.
 
     Returns:
-        [TASK REPORT] formatted string on synchronous success.
-        [JOB SUBMITTED] formatted string on background launch.
+        [TASK REPORT] formatted string (with Sub-Thread ID) on synchronous success.
+        [JOB SUBMITTED] formatted string (with Job ID and Sub-Thread ID) on background launch.
         [BLOCKER: reason] string on failure.
     """
     # 1. ToolRuntime으로 호출 에이전트 정보 추출
@@ -221,12 +242,9 @@ async def invoke_sub_agent(
     if runtime and hasattr(runtime, "context") and runtime.context:
         caller_agent = getattr(runtime.context, "agent_name", None) or _CALLER_AGENT_NAME
 
-    # 2. Sub-agent 전용 세션 ID 구성 (연속성 보장)
-    sub_thread_id = f"{supervisor_tid}_{subagent_role}"
-
     client = AsyncAgentClient(base_url=FASTAPI_BASE_URL, timeout=600.0)
 
-    # 3. Agent Registry 동적 조회 — 유효하지 않은 role 즉시 차단
+    # 2. Agent Registry 동적 조회 — 유효하지 않은 role 즉시 차단
     try:
         available_agents = await client.get_agents()
         agent_names = [a.get("name") for a in available_agents if isinstance(a, dict)]
@@ -238,24 +256,30 @@ async def invoke_sub_agent(
     except Exception as e:
         return f"[BLOCKER: Failed to query agent registry — {str(e)}]"
 
-    # 4. 첫 호출 여부 판단 — 세션 이력 조회
-    try:
-        prior_messages = await client.get_messages(sub_thread_id)
-        is_first_call = len(prior_messages) == 0
-    except Exception:
-        # 조회 실패 시 안전하게 첫 호출로 가정
+    # 3. Sub-agent 전용 세션 ID 구성 및 첫 호출 여부 판단
+    #    - sub_thread_id 미지정 시: 매 호출마다 고유 ID 자동 생성 (동시/독립 호출 시 단기 메모리 완벽 격리)
+    #    - sub_thread_id 지정 시: 기존 세션 재사용 (연속 작업 및 복구 예산 유지)
+    if sub_thread_id and sub_thread_id.strip():
+        resolved_sub_tid = sub_thread_id.strip()
+        try:
+            prior_messages = await client.get_messages(resolved_sub_tid)
+            is_first_call = len(prior_messages) == 0
+        except Exception:
+            is_first_call = False
+    else:
+        resolved_sub_tid = f"{supervisor_tid}_{subagent_role}_{uuid.uuid4().hex[:8]}"
         is_first_call = True
 
-    # 5. 3-Layer 메시지 구성 (첫 호출: Full Protocol / 이후: Reminder)
+    # 4. 3-Layer 메시지 구성 (첫 호출: Full Protocol / 이후: Reminder)
     message = _build_subagent_message(task_instruction, target_file_list, is_first_call)
 
-    # 6. 백그라운드 비동기 실행 모드
+    # 5. 백그라운드 비동기 실행 모드
     if run_in_background:
         try:
             job_res = await client.submit_job(
                 agent_name=subagent_role,
                 message=message,
-                thread_id=sub_thread_id,
+                thread_id=resolved_sub_tid,
                 callback_agent=caller_agent,
                 callback_thread_id=supervisor_tid,
             )
@@ -267,6 +291,7 @@ async def invoke_sub_agent(
                 f"[JOB SUBMITTED]\n"
                 f"- Job ID: {job_id}\n"
                 f"- Sub-Agent: {subagent_role}\n"
+                f"- Sub-Thread ID: {resolved_sub_tid} (use sub_thread_id='{resolved_sub_tid}' to continue this agent)\n"
                 f"- Status: RUNNING (Background)\n"
                 f"- Tracking: The server will automatically notify and wake you up with full results when this job completes.\n"
                 f"Please inform the user that the task has started in the background."
@@ -274,16 +299,20 @@ async def invoke_sub_agent(
         except Exception as e:
             return f"[BLOCKER: Background job submission exception — {str(e)}]"
 
-    # 7. 일반 동기 실행 모드
+    # 6. 일반 동기 실행 모드
     try:
         response = await client.async_invoke(
             agent_name=subagent_role,
             message=message,
-            thread_id=sub_thread_id,
+            thread_id=resolved_sub_tid,
         )
         if response.get("type") == "error":
             return f"[BLOCKER: Sub-agent call failed — {response.get('content', 'unknown error')}]"
-        return response.get("content", "[BLOCKER: Empty response from sub-agent]")
+        content = response.get("content", "[BLOCKER: Empty response from sub-agent]")
+        return (
+            f"{content}\n"
+            f"- Sub-Thread ID: {resolved_sub_tid} (use sub_thread_id='{resolved_sub_tid}' to continue this agent)"
+        )
     except Exception as e:
         return f"[BLOCKER: Sub-agent execution exception — {str(e)}]"
 
@@ -317,6 +346,7 @@ async def get_sub_agent_job_status(job_id: str) -> str:
 
         status = job.get("status")
         agent_name = job.get("agent_name")
+        sub_tid = job.get("sub_thread_id", "unknown")
         created_at = job.get("created_at")
 
         if status == "SUCCESS":
@@ -324,6 +354,7 @@ async def get_sub_agent_job_status(job_id: str) -> str:
                 f"[JOB STATUS: SUCCESS]\n"
                 f"- Job ID: {job_id}\n"
                 f"- Sub-Agent: {agent_name}\n"
+                f"- Sub-Thread ID: {sub_tid} (use sub_thread_id='{sub_tid}' to continue this agent)\n"
                 f"- Completed At: {job.get('completed_at')}\n"
                 f"- Report Result:\n{job.get('result')}"
             )
@@ -332,6 +363,7 @@ async def get_sub_agent_job_status(job_id: str) -> str:
                 f"[JOB STATUS: FAILED]\n"
                 f"- Job ID: {job_id}\n"
                 f"- Sub-Agent: {agent_name}\n"
+                f"- Sub-Thread ID: {sub_tid}\n"
                 f"- Error: {job.get('error')}"
             )
         else:
@@ -339,6 +371,7 @@ async def get_sub_agent_job_status(job_id: str) -> str:
                 f"[JOB STATUS: {status}]\n"
                 f"- Job ID: {job_id}\n"
                 f"- Sub-Agent: {agent_name}\n"
+                f"- Sub-Thread ID: {sub_tid}\n"
                 f"- Created At: {created_at}\n"
                 f"- Status: Currently in progress. Please wait for completion notification."
             )

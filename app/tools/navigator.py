@@ -30,18 +30,84 @@ import shutil
 import tempfile
 import platform
 import logging
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import wraps
 from urllib.parse import urlsplit
 from datetime import datetime
 from typing import Optional
 
 from bs4 import BeautifulSoup, Tag
+from langchain_core.runnables.config import var_child_runnable_config
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 
+# 현재 실행 중인 스크래퍼/에이전트 세션(thread_id) 및 멀티탭(tab_id) 식별자 ContextVar
+_DEFAULT_BROWSER_SESSION = "default"
+_DEFAULT_BROWSER_TAB = "default"
+_browser_session_var: ContextVar[Optional[str]] = ContextVar(
+    "_browser_session_var", default=None
+)
+_browser_tab_var: ContextVar[Optional[str]] = ContextVar(
+    "_browser_tab_var", default=None
+)
+
+
+def _current_browser_session_id(session_id: Optional[str] = None) -> str:
+    """현재 실행 중인 스크래퍼/에이전트의 브라우저 세션 ID(thread_id)를 반환합니다."""
+    if session_id and str(session_id).strip():
+        return str(session_id).strip()
+    ctx_sid = _browser_session_var.get()
+    if ctx_sid:
+        return ctx_sid
+    try:
+        cfg = var_child_runnable_config.get()
+        if isinstance(cfg, dict):
+            tid = (cfg.get("configurable") or {}).get("thread_id")
+            if tid and str(tid).strip():
+                return str(tid).strip()
+    except Exception:
+        pass
+    return _DEFAULT_BROWSER_SESSION
+
+
+def _current_browser_tab_id(tab_id: Optional[str] = None) -> str:
+    """현재 실행 중인 도구 호출의 탭 ID(tab_id)를 반환합니다."""
+    if tab_id and str(tab_id).strip():
+        return str(tab_id).strip()
+    ctx_tid = _browser_tab_var.get()
+    if ctx_tid:
+        return ctx_tid
+    return _DEFAULT_BROWSER_TAB
+
+
+def _current_browser_slot_key(
+    session_id: Optional[str] = None,
+    tab_id: Optional[str] = None,
+) -> str:
+    """(session_id, tab_id) 복합 슬롯 키를 반환합니다."""
+    sid = _current_browser_session_id(session_id)
+    tid = _current_browser_tab_id(tab_id)
+    if sid == _DEFAULT_BROWSER_SESSION and tid == _DEFAULT_BROWSER_TAB:
+        return _DEFAULT_BROWSER_SESSION
+    return f"{sid}::{tid}"
+
+
+@contextmanager
+def browser_session_scope(session_id: str, tab_id: str = _DEFAULT_BROWSER_TAB):
+    """명시적으로 브라우저 세션(thread_id)과 탭(tab_id)을 지정하는 컨텍스트 매니저."""
+    tok_s = _browser_session_var.set(_current_browser_session_id(session_id))
+    tok_t = _browser_tab_var.set(_current_browser_tab_id(tab_id))
+    try:
+        yield
+    finally:
+        _browser_tab_var.reset(tok_t)
+        _browser_session_var.reset(tok_s)
+
+
 # =============================================================================
-# PlaywrightManager 싱글턴 — 브라우저 생명주기 관리
+# PlaywrightManager 싱글턴 — 브라우저 생명주기 및 세션·멀티탭 격리 관리
 # =============================================================================
 
 # 쿠키 배너 자동 처리 셀렉터 (playwright-skill helpers.js:67-88 패턴 이식 + 한국 대응)
@@ -76,17 +142,17 @@ CDP_DEBUG_PORT = 9242
 
 
 class PlaywrightManager:
-    """CDP 공유 기반 Playwright 브라우저 생명주기 관리자.
+    """CDP 공유 기반 Playwright 브라우저 생명주기 및 멀티 스크래퍼·멀티탭 관리자.
     
     Chrome을 remote-debugging-port와 함께 기동하고, Playwright가
     connect_over_cdp()로 연결합니다. 동일한 cdp_url을 browser-use의
     BrowserSession에도 전달하여 Playwright와 browser-use가 같은
     Chrome 인스턴스를 공유합니다.
     
-    이를 통해:
-    - browser-use(L3)가 수행한 로그인 등의 세션 상태를
-      L1/L2 도구가 즉시 활용 가능
-    - 브라우저 인스턴스 공유로 메모리 효율성 확보
+    또한 (session_id, tab_id) 복합 슬롯별로 독립된 탭(Page)과 Lock을 관리하여:
+    - 여러 스크래퍼가 동시에 실행될 때 각자 독립된 탭에서 간섭 없이 병렬 작업하고,
+    - 단일 스크래퍼 내부에서도 tab_id('default', 'list', 'detail' 등)를 분리해
+      여러 탭을 동시에 열거나 상태를 유지한 채 오갈 수 있습니다.
     """
     _instance: Optional["PlaywrightManager"] = None
     _playwright = None
@@ -100,11 +166,51 @@ class PlaywrightManager:
         self._browser = None
         self._chrome_process = None
         self._user_data_dir = None
-        self._active_page = None
-        self._active_target_id = None
+        self._pages_by_session: dict[str, object] = {}
+        self._target_ids_by_session: dict[str, Optional[str]] = {}
+        self._session_locks: dict[str, asyncio.Lock] = {}
         self._watched_contexts = set()
         self._launch_lock = asyncio.Lock()
         self._operation_lock = asyncio.Lock()
+        self._tab_alloc_lock = asyncio.Lock()
+        self._browser_use_lock = asyncio.Lock()
+        self._suppress_page_event = False
+
+    @property
+    def _active_page(self):
+        slot = _current_browser_slot_key()
+        return self._pages_by_session.get(slot)
+
+    @_active_page.setter
+    def _active_page(self, page):
+        slot = _current_browser_slot_key()
+        if page is None:
+            self._pages_by_session.pop(slot, None)
+        else:
+            self._pages_by_session[slot] = page
+
+    @property
+    def _active_target_id(self) -> Optional[str]:
+        slot = _current_browser_slot_key()
+        return self._target_ids_by_session.get(slot)
+
+    @_active_target_id.setter
+    def _active_target_id(self, target_id: Optional[str]):
+        slot = _current_browser_slot_key()
+        if target_id is None:
+            self._target_ids_by_session.pop(slot, None)
+        else:
+            self._target_ids_by_session[slot] = target_id
+
+    def _get_session_lock(
+        self,
+        session_id: Optional[str] = None,
+        tab_id: Optional[str] = None,
+    ) -> asyncio.Lock:
+        slot = _current_browser_slot_key(session_id, tab_id)
+        if slot == _DEFAULT_BROWSER_SESSION:
+            return self._operation_lock
+        return self._session_locks.setdefault(slot, asyncio.Lock())
     
     @classmethod
     async def get_instance(cls) -> "PlaywrightManager":
@@ -273,7 +379,7 @@ class PlaywrightManager:
                     logger.debug("Playwright driver already stopped", exc_info=True)
                 self._playwright = None
             self._browser = None
-            self._active_page = None
+            self._pages_by_session.clear()
             self._watched_contexts.clear()
             if self._chrome_process is not None and self._chrome_process.returncode is None:
                 from playwright.async_api import async_playwright
@@ -285,13 +391,21 @@ class PlaywrightManager:
                     self._playwright = None
                     raise
             else:
-                self._active_target_id = None
+                self._target_ids_by_session.clear()
                 await self._launch()
 
-    def _remember_page(self, page):
-        if page is not self._active_page:
-            self._active_target_id = None
-        self._active_page = page
+    def _remember_page(
+        self,
+        page,
+        session_id: Optional[str] = None,
+        tab_id: Optional[str] = None,
+    ):
+        if self._suppress_page_event and session_id is None and tab_id is None:
+            return
+        slot = _current_browser_slot_key(session_id, tab_id)
+        if page is not self._pages_by_session.get(slot):
+            self._target_ids_by_session.pop(slot, None)
+        self._pages_by_session[slot] = page
 
     def _watch_context(self, context):
         if context not in self._watched_contexts:
@@ -308,34 +422,50 @@ class PlaywrightManager:
         finally:
             await session.detach()
 
-    async def adopt_target(self, target_id: str):
+    async def adopt_target(
+        self,
+        target_id: str,
+        session_id: Optional[str] = None,
+        tab_id: Optional[str] = None,
+    ):
         """Select browser-use's final tab, including after a CDP reconnect."""
+        slot = _current_browser_slot_key(session_id, tab_id)
         await self._ensure_browser()
         for context in self._browser.contexts:
             self._watch_context(context)
             for page in context.pages:
                 if not page.is_closed() and await self.page_target_id(page) == target_id:
-                    self._active_page = page
-                    self._active_target_id = target_id
+                    self._pages_by_session[slot] = page
+                    self._target_ids_by_session[slot] = target_id
                     return page
         return None
 
-    async def focus_browser_session(self, browser_session):
+    async def focus_browser_session(
+        self,
+        browser_session,
+        session_id: Optional[str] = None,
+        tab_id: Optional[str] = None,
+    ):
         """Hand the current Playwright tab to browser-use without navigating."""
         from browser_use.browser.events import SwitchTabEvent
 
-        page = await self.get_page(wait_ms=0)
+        page = await self.get_page(wait_ms=0, session_id=session_id, tab_id=tab_id)
         target_id = await self.page_target_id(page)
         await browser_session.start()
         event = browser_session.event_bus.dispatch(SwitchTabEvent(target_id=target_id))
         await event
         await event.event_result(raise_if_any=True, raise_if_none=False)
 
-    async def sync_browser_session(self, browser_session):
+    async def sync_browser_session(
+        self,
+        browser_session,
+        session_id: Optional[str] = None,
+        tab_id: Optional[str] = None,
+    ):
         """Call before stop(), which clears browser-use's focused target ID."""
         target_id = browser_session.agent_focus_target_id
         if target_id:
-            return await self.adopt_target(target_id)
+            return await self.adopt_target(target_id, session_id=session_id, tab_id=tab_id)
         return None
 
     @staticmethod
@@ -349,23 +479,61 @@ class PlaywrightManager:
             return parts.geturl()
         return normalized(left) == normalized(right)
 
-    async def get_page(self, url: str = None, wait_ms: int = 3000, reload: bool = False):
-        """Return the active shared tab, creating a tab only when none survives.
+    async def get_page(
+        self,
+        url: str = None,
+        wait_ms: int = 3000,
+        reload: bool = False,
+        session_id: Optional[str] = None,
+        tab_id: Optional[str] = None,
+    ):
+        """Return the active tab for the current (session_id, tab_id) slot, creating an isolated tab when needed.
 
         Empty URL continues the current document. The same URL preserves DOM,
         input, scroll and sessionStorage; a different URL navigates this tab.
         Set reload=True to explicitly refresh the document.
         """
+        slot = _current_browser_slot_key(session_id, tab_id)
         await self._ensure_browser()
-        if self._active_page is None and self._active_target_id:
-            await self.adopt_target(self._active_target_id)
-        if self._active_page is None or self._active_page.is_closed():
-            context = self._browser.contexts[0] if self._browser.contexts else await self._browser.new_context()
-            self._watch_context(context)
-            pages = [p for p in context.pages if not p.is_closed()]
-            page = pages[-1] if pages else await context.new_page()
-            self._remember_page(page)
-        page = self._active_page
+        page = self._pages_by_session.get(slot)
+        target_id = self._target_ids_by_session.get(slot)
+        if page is None and target_id:
+            page = await self.adopt_target(target_id, session_id=session_id, tab_id=tab_id)
+        if page is None or page.is_closed():
+            async with self._tab_alloc_lock:
+                page = self._pages_by_session.get(slot)
+                if page is None or page.is_closed():
+                    context = self._browser.contexts[0] if self._browser.contexts else await self._browser.new_context()
+                    self._watch_context(context)
+                    assigned_pages = {
+                        p for k, p in self._pages_by_session.items()
+                        if k != slot and p is not None and not p.is_closed()
+                    }
+                    other_target_ids = {
+                        tid for k, tid in self._target_ids_by_session.items()
+                        if k != slot and tid
+                    }
+                    unassigned_pages = []
+                    for p in context.pages:
+                        if p.is_closed() or p in assigned_pages:
+                            continue
+                        if other_target_ids:
+                            try:
+                                if await self.page_target_id(p) in other_target_ids:
+                                    continue
+                            except Exception:
+                                pass
+                        unassigned_pages.append(p)
+                    if unassigned_pages and not assigned_pages and not other_target_ids:
+                        page = unassigned_pages[-1]
+                    else:
+                        self._suppress_page_event = True
+                        try:
+                            page = await context.new_page()
+                        finally:
+                            self._suppress_page_event = False
+                    self._remember_page(page, session_id=session_id, tab_id=tab_id)
+        page = self._pages_by_session.get(slot)
         self._watch_context(page.context)
         navigated = False
         if url and not self._same_url(url, page.url):
@@ -378,8 +546,8 @@ class PlaywrightManager:
             await page.wait_for_timeout(wait_ms)
         if navigated:
             await self._dismiss_cookie_banner(page)
-        if page is self._active_page:
-            self._active_target_id = await self.page_target_id(page)
+        if page is self._pages_by_session.get(slot):
+            self._target_ids_by_session[slot] = await self.page_target_id(page)
         return page
     
     async def _dismiss_cookie_banner(self, page, timeout_ms: int = 2000):
@@ -405,8 +573,9 @@ class PlaywrightManager:
         
         Chrome subprocess와 임시 디렉토리도 정리합니다.
         """
-        self._active_page = None
-        self._active_target_id = None
+        self._pages_by_session.clear()
+        self._target_ids_by_session.clear()
+        self._session_locks.clear()
         self._watched_contexts.clear()
         if self._browser:
             await self._browser.close()
@@ -437,15 +606,24 @@ class PlaywrightManager:
 
 
 def _shared_browser_tool(function):
-    """Prevent concurrent tools from navigating or editing the shared tab."""
+    """Isolate browser tabs by (session_id, tab_id) and serialize tool calls targeting the same tab."""
     @wraps(function)
     async def wrapped(*args, **kwargs):
         try:
             manager = await PlaywrightManager.get_instance()
         except Exception as exc:
             return f"[Error] 브라우저 준비 실패: {exc}"
-        async with manager._operation_lock:
-            return await function(*args, **kwargs)
+        sid = _current_browser_session_id()
+        tid = _current_browser_tab_id(kwargs.get("tab_id"))
+        tok_s = _browser_session_var.set(sid)
+        tok_t = _browser_tab_var.set(tid)
+        try:
+            slot_lock = manager._get_session_lock(sid, tid)
+            async with slot_lock:
+                return await function(*args, **kwargs)
+        finally:
+            _browser_tab_var.reset(tok_t)
+            _browser_session_var.reset(tok_s)
     return wrapped
 
 
@@ -608,12 +786,15 @@ class ExtractDomSkeletonInput(BaseModel):
     root_selector: str = Field(default="body", description="분석 시작 루트 요소의 CSS 셀렉터 (기본: body)")
     max_depth: int = Field(default=8, description="DOM 탐색 최대 깊이 (기본: 8, SPA 대응)")
     wait_ms: int = Field(default=3000, description="페이지 로드 후 JS 대기 시간(ms) (기본: 3000)")
-
     reload: bool = Field(default=False, description="현재 문서를 명시적으로 새로고침할 때만 True")
+    tab_id: str = Field(
+        default="default",
+        description="브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정하세요."
+    )
 
 @tool(args_schema=ExtractDomSkeletonInput)
 @_shared_browser_tool
-async def extract_dom_skeleton(url: str = "", root_selector: str = "body", max_depth: int = 8, wait_ms: int = 3000, reload: bool = False) -> str:
+async def extract_dom_skeleton(url: str = "", root_selector: str = "body", max_depth: int = 8, wait_ms: int = 3000, reload: bool = False, tab_id: str = "default") -> str:
     """페이지의 DOM 트리 구조를 간결한 스켈레톤(구조 맵)으로 반환합니다.
 
     url을 생략하면 현재 공유 탭을 분석합니다. 같은 URL의 상태도 유지하며,
@@ -624,10 +805,12 @@ async def extract_dom_skeleton(url: str = "", root_selector: str = "body", max_d
     get_page_section으로 해당 영역의 실제 HTML을 확인하세요.
 
     Args:
-        url: 분석할 웹페이지 URL
+        url: 분석할 웹페이지 URL (빈 문자열이면 현재 탭 상태 유지)
         root_selector: 분석 시작 루트 요소의 CSS 셀렉터 (기본: body)
         max_depth: DOM 탐색 최대 깊이 (기본: 8, SPA 대응)
         wait_ms: 페이지 로드 후 JS 대기 시간(ms) (기본: 3000)
+        reload: 현재 문서를 명시적으로 새로고침할 때만 True (기본: False)
+        tab_id: 브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정
     
     Returns:
         DOM 스켈레톤 구조 맵 텍스트. 반복 패턴, 구조 변형, 주요 속성을 한눈에 파악할 수 있습니다.
@@ -636,7 +819,7 @@ async def extract_dom_skeleton(url: str = "", root_selector: str = "body", max_d
     
     try:
         manager = await PlaywrightManager.get_instance()
-        page = await manager.get_page(url, wait_ms, reload=reload)
+        page = await manager.get_page(url, wait_ms, reload=reload, tab_id=tab_id)
     except Exception as e:
         return f"[Error] 페이지 로드 실패: {e}\n→ URL이 올바른지 확인하세요."
     
@@ -698,12 +881,15 @@ class GetPageSectionInput(BaseModel):
     root_selector: str = Field(description="추출할 영역의 CSS 셀렉터 (예: '.product_list', '#content')")
     max_chars: int = Field(default=30000, description="반환 HTML 최대 문자 수 (기본: 30000 ≈ ~7.5K 토큰)")
     wait_ms: int = Field(default=3000, description="페이지 로드 후 JS 대기 시간(ms) (기본: 3000)")
-
     reload: bool = Field(default=False, description="현재 문서를 명시적으로 새로고침할 때만 True")
+    tab_id: str = Field(
+        default="default",
+        description="브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정하세요."
+    )
 
 @tool(args_schema=GetPageSectionInput)
 @_shared_browser_tool
-async def get_page_section(url: str = "", root_selector: str = "body", max_chars: int = 30000, wait_ms: int = 3000, reload: bool = False) -> str:
+async def get_page_section(url: str = "", root_selector: str = "body", max_chars: int = 30000, wait_ms: int = 3000, reload: bool = False, tab_id: str = "default") -> str:
     """특정 영역의 정제된 HTML 원문을 반환합니다.
 
     인터랙션 이후에는 url을 생략해 현재 공유 탭의 DOM을 읽으세요.
@@ -714,10 +900,12 @@ async def get_page_section(url: str = "", root_selector: str = "body", max_chars
     CSS 셀렉터를 결정할 때 사용합니다.
 
     Args:
-        url: 대상 웹페이지 URL
+        url: 대상 웹페이지 URL (빈 문자열이면 현재 탭 상태 유지)
         root_selector: 추출할 영역의 CSS 셀렉터 (예: '.product_list', '#content')
         max_chars: 반환 HTML 최대 문자 수 (기본: 30000 ≈ ~7.5K 토큰)
         wait_ms: 페이지 로드 후 JS 대기 시간(ms) (기본: 3000)
+        reload: 현재 문서를 명시적으로 새로고침할 때만 True (기본: False)
+        tab_id: 브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정
     
     Returns:
         정제된 HTML 원문. script/style/svg/noscript 태그가 제거된 상태입니다.
@@ -726,7 +914,7 @@ async def get_page_section(url: str = "", root_selector: str = "body", max_chars
     
     try:
         manager = await PlaywrightManager.get_instance()
-        page = await manager.get_page(url, wait_ms, reload=reload)
+        page = await manager.get_page(url, wait_ms, reload=reload, tab_id=tab_id)
     except Exception as e:
         return f"[Error] 페이지 로드 실패: {e}"
     
@@ -790,12 +978,15 @@ class VerifySelectorsInput(BaseModel):
     selectors_json: str = Field(description="JSON 문자열 셀렉터 딕셔너리. 텍스트: '{\"title\": \"a.title\"}', 속성: '{\"link\": \"a.title::attr(href)\"}'")
     max_samples: int = Field(default=5, description="각 셀렉터당 반환할 최대 샘플 수 (기본: 5)")
     wait_ms: int = Field(default=2000, description="페이지 로드 후 대기 시간(ms) (기본: 2000)")
-
     reload: bool = Field(default=False, description="현재 문서를 명시적으로 새로고침할 때만 True")
+    tab_id: str = Field(
+        default="default",
+        description="브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정하세요."
+    )
 
 @tool(args_schema=VerifySelectorsInput)
 @_shared_browser_tool
-async def verify_selectors(url: str = "", selectors_json: str = "{}", max_samples: int = 5, wait_ms: int = 2000, reload: bool = False) -> str:
+async def verify_selectors(url: str = "", selectors_json: str = "{}", max_samples: int = 5, wait_ms: int = 2000, reload: bool = False, tab_id: str = "default") -> str:
     """CSS 셀렉터가 실제로 데이터를 가져오는지 브라우저로 검증합니다.
 
     url을 생략하면 현재 공유 탭을 검증합니다. 전체 매칭 수와 반환한 샘플 수를
@@ -804,12 +995,14 @@ async def verify_selectors(url: str = "", selectors_json: str = "{}", max_sample
     기본적으로 요소의 텍스트를 반환하며, 속성(href, src 등)이 필요하면 ::attr() 구문을 사용하세요.
 
     Args:
-        url: 검증할 웹페이지 URL
+        url: 검증할 웹페이지 URL (빈 문자열이면 현재 탭 상태 유지)
         selectors_json: JSON 문자열 셀렉터 딕셔너리.
             텍스트: '{"title": "a.title"}'
             속성: '{"link": "a.title::attr(href)", "image": "img.thumb::attr(src)"}'
         max_samples: 각 셀렉터당 반환할 최대 샘플 수 (기본: 5)
         wait_ms: 페이지 로드 후 대기 시간(ms) (기본: 2000)
+        reload: 현재 문서를 명시적으로 새로고침할 때만 True (기본: False)
+        tab_id: 브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정
     
     Returns:
         각 셀렉터의 검증 결과 (OK/FAILED)와 샘플 데이터
@@ -823,7 +1016,7 @@ async def verify_selectors(url: str = "", selectors_json: str = "{}", max_sample
     
     try:
         manager = await PlaywrightManager.get_instance()
-        page = await manager.get_page(url, wait_ms, reload=reload)
+        page = await manager.get_page(url, wait_ms, reload=reload, tab_id=tab_id)
     except Exception as e:
         return f"[Error] 페이지 로드 실패: {e}"
     
@@ -883,12 +1076,15 @@ class InteractPageInput(BaseModel):
         '\'[{"action": "wait", "selector": ".results", "timeout_ms": 5000}]\''
     ))
     wait_ms: int = Field(default=2000, description="액션 후 결과 대기 시간(ms) (기본: 2000)")
-
     reload: bool = Field(default=False, description="현재 문서를 명시적으로 새로고침할 때만 True")
+    tab_id: str = Field(
+        default="default",
+        description="브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정하세요."
+    )
 
 @tool(args_schema=InteractPageInput)
 @_shared_browser_tool
-async def interact_page(url: str = "", actions_json: str = "[]", wait_ms: int = 2000, reload: bool = False) -> str:
+async def interact_page(url: str = "", actions_json: str = "[]", wait_ms: int = 2000, reload: bool = False, tab_id: str = "default") -> str:
     """페이지에서 클릭, 입력, 스크롤 등 경량 인터랙션을 수행합니다.
 
     url을 생략하면 활성 탭에서 계속합니다. 작업 후 탭을 유지하므로 L1 도구와
@@ -906,6 +1102,8 @@ async def interact_page(url: str = "", actions_json: str = "[]", wait_ms: int = 
             - scroll: {"action": "scroll", "direction": "down", "amount": 3000}
             - wait: {"action": "wait", "selector": ".results", "timeout_ms": 5000}
         wait_ms: 액션 후 결과 대기 시간(ms) (기본: 2000)
+        reload: 현재 문서를 명시적으로 새로고침할 때만 True (기본: False)
+        tab_id: 브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정
 
     Returns:
         수행 결과 요약 (현재 URL, 각 액션 성공/실패, DOM 변경 감지)
@@ -922,7 +1120,7 @@ async def interact_page(url: str = "", actions_json: str = "[]", wait_ms: int = 
     
     try:
         manager = await PlaywrightManager.get_instance()
-        page = await manager.get_page(url if url else None, wait_ms=wait_ms, reload=reload)
+        page = await manager.get_page(url if url else None, wait_ms=wait_ms, reload=reload, tab_id=tab_id)
     except Exception as e:
         return f"[Error] 페이지 로드 실패: {e}"
     
@@ -938,7 +1136,7 @@ async def interact_page(url: str = "", actions_json: str = "[]", wait_ms: int = 
     try:
         for i, action_spec in enumerate(actions):
             # Follow a popup opened by the preceding action.
-            page = await manager.get_page(wait_ms=0)
+            page = await manager.get_page(wait_ms=0, tab_id=tab_id)
             action_type = action_spec.get("action", "").lower()
             selector = action_spec.get("selector", "")
             
@@ -979,7 +1177,7 @@ async def interact_page(url: str = "", actions_json: str = "[]", wait_ms: int = 
         await page.wait_for_timeout(wait_ms)
         
         # 인터랙션 후 상태
-        page = await manager.get_page(wait_ms=0)
+        page = await manager.get_page(wait_ms=0, tab_id=tab_id)
         final_url = page.url
         try:
             final_content_length = len(await page.content())
@@ -1014,12 +1212,15 @@ class TakeScreenshotInput(BaseModel):
     selector: str = Field(default="", description="특정 요소만 캡처할 CSS 셀렉터 (빈 문자열이면 전체 페이지)")
     full_page: bool = Field(default=True, description="전체 페이지 캡처 여부 (기본: True)")
     filename: str = Field(default="", description="저장 파일명 (빈 문자열이면 타임스탬프 자동 생성)")
-
     reload: bool = Field(default=False, description="현재 문서를 명시적으로 새로고침할 때만 True")
+    tab_id: str = Field(
+        default="default",
+        description="브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정하세요."
+    )
 
 @tool(args_schema=TakeScreenshotInput)
 @_shared_browser_tool
-async def take_screenshot(url: str = "", selector: str = "", full_page: bool = True, filename: str = "", reload: bool = False) -> str:
+async def take_screenshot(url: str = "", selector: str = "", full_page: bool = True, filename: str = "", reload: bool = False, tab_id: str = "default") -> str:
     """현재 페이지 또는 특정 영역의 스크린샷을 저장합니다.
 
     url을 생략하면 현재 공유 탭을 캡처하고 탭을 유지합니다.
@@ -1033,6 +1234,8 @@ async def take_screenshot(url: str = "", selector: str = "", full_page: bool = T
         selector: 특정 요소만 캡처할 CSS 셀렉터 (빈 문자열이면 전체)
         full_page: 전체 페이지 캡처 여부 (기본: True)
         filename: 저장 파일명 (빈 문자열이면 타임스탬프 자동 생성)
+        reload: 현재 문서를 명시적으로 새로고침할 때만 True (기본: False)
+        tab_id: 브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정
 
     Returns:
         저장된 스크린샷 파일의 절대 경로
@@ -1054,7 +1257,7 @@ async def take_screenshot(url: str = "", selector: str = "", full_page: bool = T
     
     try:
         manager = await PlaywrightManager.get_instance()
-        page = await manager.get_page(url if url else None, wait_ms=2000, reload=reload)
+        page = await manager.get_page(url if url else None, wait_ms=2000, reload=reload, tab_id=tab_id)
     except Exception as e:
         return f"[Error] 페이지 로드 실패: {e}"
     
@@ -1111,11 +1314,15 @@ class BrowseWebInput(BaseModel):
         default=15,
         description="최대 탐색 단계 수 (기본 15, 복잡한 작업은 25~30)"
     )
+    tab_id: str = Field(
+        default="default",
+        description="브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정하세요."
+    )
 
 
 @tool(args_schema=BrowseWebInput)
 @_shared_browser_tool
-async def browse_web(task: str, url: str = "", max_steps: int = 15) -> str:
+async def browse_web(task: str, url: str = "", max_steps: int = 15, tab_id: str = "default") -> str:
     """[Level 3 - 최후의 수단] browser-use 에이전트를 가동하여 고난이도 웹 작업을 자율 수행합니다.
 
     Level 1(정적 분석)과 Level 2(interact_page)로 해결할 수 없는 경우에만 호출하세요.
@@ -1134,6 +1341,7 @@ async def browse_web(task: str, url: str = "", max_steps: int = 15) -> str:
         task: 브라우저가 자율적으로 수행해야 할 자연어 지시사항
         url: 시작 URL (빈 문자열이면 현재 페이지에서 계속)
         max_steps: 최대 탐색 단계 수 (기본 15)
+        tab_id: 브라우저 탭 식별자 (기본: 'default'). 단일 스크래퍼가 여러 탭(예: 'list', 'detail')을 동시에 열어 상태를 유지하거나 병렬 탐색할 때 지정
 
     Returns:
         수행 결과 요약 (스텝 수, 성공 여부, 최종 URL, 에이전트 결과)
@@ -1146,68 +1354,70 @@ async def browse_web(task: str, url: str = "", max_steps: int = 15) -> str:
         # 1. PlaywrightManager에서 CDP URL 획득 (같은 Chrome 공유)
         manager = await PlaywrightManager.get_instance()
         cdp_url = manager.cdp_url
-        
-        # 2. browser-use BrowserSession을 동일 Chrome에 연결
-        from browser_use import Agent, BrowserSession
-        browser_session = BrowserSession(cdp_url=cdp_url, keep_alive=True)
-        page = await manager.get_page(url or None, wait_ms=0)
-        await manager.focus_browser_session(browser_session)
-        
-        # 3. LLM 설정 (browser-use 전용 래퍼)
-        #    .env에서 OPENAI_API_KEY를 로드하여 browser-use ChatOpenAI에 전달
-        from dotenv import load_dotenv
-        load_dotenv()
-        from browser_use import ChatOpenAI
-        llm = ChatOpenAI(model="gpt-4.1-mini")
-        
-        # 4. task에 가이드라인 프리펜드
-        full_task = BROWSER_AGENT_GUIDE + "\n"
-        full_task += (
-            f"[현재 공유 탭]\n{page.url}\n"
-            f"[작업]\n현재 탭의 상태에서 다음을 수행하세요: {task}\n"
-            "입력값·스크롤·로그인 상태를 유지하고, 작업에 필요한 경우에만 이동하거나 새로고침하세요. "
-            "작업 완료 후에도 후속 분석을 위해 마지막 탭을 열어 두세요."
-        )
-        
-        # 5. Agent 실행
-        agent = Agent(
-            task=full_task,
-            llm=llm,
-            browser_session=browser_session,
-            use_vision=True,
-            max_actions_per_step=3,
-        )
-        history = await agent.run(max_steps=max_steps)
-        
-        # 6. 결과 포맷팅 (탭 인계와 세션 연결 정리는 finally에서 수행)
-        steps = len(history)
-        success = history.is_successful()
-        urls = history.urls()
-        final_url = urls[-1] if urls else "알 수 없음"
-        result_text = history.final_result() or "결과 반환 없음"
-        
-        summary = (
-            f"[browse_web 실행 결과]\n"
-            f"  스텝: {steps}/{max_steps}, 성공: {'✅' if success else '❌'}\n"
-            f"  최종 URL: {final_url}\n"
-            f"  💡 동일 Chrome 세션 유지 — L1/L2 도구에서 인증 상태 접근 가능\n\n"
-            f"{result_text}"
-        )
-        
-        print(f"  → browse_web 완료: {steps}스텝, {'성공' if success else '실패'}")
-        return summary
-        
+
+        async with manager._browser_use_lock:
+            try:
+                # 2. browser-use BrowserSession을 동일 Chrome에 연결
+                from browser_use import Agent, BrowserSession
+                browser_session = BrowserSession(cdp_url=cdp_url, keep_alive=True)
+                page = await manager.get_page(url or None, wait_ms=0, tab_id=tab_id)
+                await manager.focus_browser_session(browser_session, tab_id=tab_id)
+                
+                # 3. LLM 설정 (browser-use 전용 래퍼)
+                #    .env에서 OPENAI_API_KEY를 로드하여 browser-use ChatOpenAI에 전달
+                from dotenv import load_dotenv
+                load_dotenv()
+                from browser_use import ChatOpenAI
+                llm = ChatOpenAI(model="gpt-4.1-mini")
+                
+                # 4. task에 가이드라인 프리펜드
+                full_task = BROWSER_AGENT_GUIDE + "\n"
+                full_task += (
+                    f"[현재 공유 탭]\n{page.url}\n"
+                    f"[작업]\n현재 탭의 상태에서 다음을 수행하세요: {task}\n"
+                    "입력값·스크롤·로그인 상태를 유지하고, 작업에 필요한 경우에만 이동하거나 새로고침하세요. "
+                    "작업 완료 후에도 후속 분석을 위해 마지막 탭을 열어 두세요."
+                )
+                
+                # 5. Agent 실행
+                agent = Agent(
+                    task=full_task,
+                    llm=llm,
+                    browser_session=browser_session,
+                    use_vision=True,
+                    max_actions_per_step=3,
+                )
+                history = await agent.run(max_steps=max_steps)
+                
+                # 6. 결과 포맷팅 (탭 인계와 세션 연결 정리는 finally에서 수행)
+                steps = len(history)
+                success = history.is_successful()
+                urls = history.urls()
+                final_url = urls[-1] if urls else "알 수 없음"
+                result_text = history.final_result() or "결과 반환 없음"
+                
+                summary = (
+                    f"[browse_web 실행 결과]\n"
+                    f"  스텝: {steps}/{max_steps}, 성공: {'✅' if success else '❌'}\n"
+                    f"  최종 URL: {final_url}\n"
+                    f"  💡 동일 Chrome 세션 유지 — L1/L2 도구에서 인증 상태 접근 가능\n\n"
+                    f"{result_text}"
+                )
+                
+                print(f"  → browse_web 완료: {steps}스텝, {'성공' if success else '실패'}")
+                return summary
+            finally:
+                if browser_session is not None:
+                    try:
+                        await manager.sync_browser_session(browser_session, tab_id=tab_id)
+                    except Exception as exc:
+                        logger.warning("browser-use의 마지막 탭 인계 실패: %s", exc)
+                    try:
+                        await browser_session.stop()
+                    except Exception as exc:
+                        logger.warning("browser-use 연결 정리 실패: %s", exc)
     except Exception as e:
         error_msg = f"[Error] browse_web 실행 실패: {e}"
         print(f"  ❌ {error_msg}")
         return error_msg
-    finally:
-        if browser_session is not None:
-            try:
-                await manager.sync_browser_session(browser_session)
-            except Exception as exc:
-                logger.warning("browser-use의 마지막 탭 인계 실패: %s", exc)
-            try:
-                await browser_session.stop()
-            except Exception as exc:
-                logger.warning("browser-use 연결 정리 실패: %s", exc)
+
