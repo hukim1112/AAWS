@@ -111,12 +111,13 @@ class JobSubmitInput(BaseModel):
     callback_agent: Optional[str] = None
     callback_thread_id: Optional[str] = None
 
-# --- In-Memory Job Store for Long-Running Background Tasks ---
-job_store: Dict[str, dict] = {}
-
-# --- Router Factory ---
+# --- Router Factory & Async Lock Store ---
 from contextlib import asynccontextmanager
 import asyncio
+
+# --- In-Memory Job Store for Long-Running Background Tasks ---
+job_store: Dict[str, dict] = {}
+wakeup_locks: Dict[str, asyncio.Lock] = {}
 
 # --- Lifespan Context Manager (비동기 루프 기동 후 에이전트 보관소 셋업 및 셧다운 리소스 클린업) ---
 @asynccontextmanager
@@ -366,6 +367,7 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
                     f"[SYSTEM NOTIFICATION: BACKGROUND TASK COMPLETED]\n"
                     f"- Job ID: {job_id}\n"
                     f"- Sub-Agent: {agent_name}\n"
+                    f"- Sub-Thread ID: {input_data.thread_id} (use sub_thread_id='{input_data.thread_id}' to continue this agent)\n"
                     f"- Report Content:\n{task_report}\n\n"
                     f"[INSTRUCTION FOR {cb_agent.upper()}]\n"
                     f"위 서브에이전트의 완료 보고서와 생성된 산출물을 바탕으로 다음 작업을 수행하거나 유저에게 답변합니다 "
@@ -373,20 +375,22 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
                 )
 
                 cb_config = {"configurable": {"thread_id": cb_thread_id}, "recursion_limit": 100}
-                add_message(cb_thread_id, "user", trigger_prompt)
-
-                # 🌟 콜백 에이전트 전용 컨텍스트(자신의 agent_name과 thread_id) 생성
                 cb_context_obj = _create_agent_context(agent_name=cb_agent, session_id=cb_thread_id)
 
-                sup_result = await cb_executor.ainvoke(
-                    {"messages": [("user", trigger_prompt)]},
-                    config=cb_config,
-                    context=cb_context_obj
-                )
-                sup_last = sup_result["messages"][-1]
-                sup_response = sanitize_text(normalize_content(sup_last.content))
-                add_message(cb_thread_id, "assistant", sup_response)
-                job["supervisor_response"] = sup_response
+                # 동일 부모 세션(cb_thread_id)에 대해 여러 백그라운드 Job이 동시에 완료될 때
+                # Supervisor Checkpointer가 겹치지 않도록 Lock으로 직렬화
+                cb_lock = wakeup_locks.setdefault(cb_thread_id, asyncio.Lock())
+                async with cb_lock:
+                    add_message(cb_thread_id, "user", trigger_prompt)
+                    sup_result = await cb_executor.ainvoke(
+                        {"messages": [("user", trigger_prompt)]},
+                        config=cb_config,
+                        context=cb_context_obj
+                    )
+                    sup_last = sup_result["messages"][-1]
+                    sup_response = sanitize_text(normalize_content(sup_last.content))
+                    add_message(cb_thread_id, "assistant", sup_response)
+                    job["supervisor_response"] = sup_response
                 logger.info(f"🎉 [Job {job_id}] Reactive Wakeup completed! Supervisor produced final response.")
             except Exception as cb_err:
                 logger.error(f"⚠️ [Job {job_id}] Error during reactive wakeup of '{input_data.callback_agent}': {cb_err}")
@@ -419,6 +423,7 @@ async def submit_agent_job(
     job_store[job_id] = {
         "job_id": job_id,
         "agent_name": agent_name,
+        "sub_thread_id": input_data.thread_id,
         "status": "SUBMITTED",
         "created_at": created_at,
         "completed_at": None,

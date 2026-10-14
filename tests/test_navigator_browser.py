@@ -194,3 +194,155 @@ class SharedBrowserTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(other.is_closed())
             self.assertEqual(len(self.page.context.pages), 2)
             self.assertIsNone(sessions[-1].agent_focus_target_id)
+
+    async def test_multi_scraper_sessions_isolate_tabs_and_state_across_interleaved_turns(self):
+        """두 개의 스크래퍼(서로 다른 thread_id)가 동시에 여러 턴에 걸쳐 브라우저 도구를 호출할 때
+        각자 독립된 탭(Page)에서 URL, DOM 상태, 입력값, 스크롤 등이 섞이지 않고 유지되는지 검증."""
+        cfg_alpha = {"configurable": {"thread_id": "sup_01_scraper_alpha"}}
+        cfg_beta = {"configurable": {"thread_id": "sup_01_scraper_beta"}}
+        url_alpha = self.url + "alpha-market"
+        url_beta = self.url + "beta-market"
+
+        # 1턴: 두 스크래퍼가 동시에 서로 다른 URL로 이동 후 각자 다른 횟수만큼 아이템 추가 및 값 기록
+        res_a1, res_b1 = await asyncio.gather(
+            navigator.interact_page.ainvoke(
+                {
+                    "url": url_alpha,
+                    "actions_json": json.dumps([
+                        {"action": "fill", "selector": "#term", "value": "alpha-secret"},
+                        {"action": "click", "selector": "#add"},
+                        {"action": "click", "selector": "#record"},
+                    ]),
+                    "wait_ms": 0,
+                },
+                config=cfg_alpha,
+            ),
+            navigator.interact_page.ainvoke(
+                {
+                    "url": url_beta,
+                    "actions_json": json.dumps([
+                        {"action": "fill", "selector": "#term", "value": "beta-secret"},
+                        {"action": "click", "selector": "#add"},
+                        {"action": "click", "selector": "#add"},
+                        {"action": "click", "selector": "#record"},
+                    ]),
+                    "wait_ms": 0,
+                },
+                config=cfg_beta,
+            ),
+        )
+        self.assertNotIn("[Error]", res_a1)
+        self.assertNotIn("[Error]", res_b1)
+
+        # 2턴: url="" (빈 문자열)로 각자의 현재 탭 상태를 이어받아 동시에 스켈레톤 및 섹션 추출
+        (skel_a, sec_a, ver_a), (skel_b, sec_b, ver_b) = await asyncio.gather(
+            asyncio.gather(
+                navigator.extract_dom_skeleton.ainvoke({"root_selector": "#items", "wait_ms": 0}, config=cfg_alpha),
+                navigator.get_page_section.ainvoke({"root_selector": "#items", "wait_ms": 0}, config=cfg_alpha),
+                navigator.verify_selectors.ainvoke({"selectors_json": '{"items":".item"}', "wait_ms": 0}, config=cfg_alpha),
+            ),
+            asyncio.gather(
+                navigator.extract_dom_skeleton.ainvoke({"root_selector": "#items", "wait_ms": 0}, config=cfg_beta),
+                navigator.get_page_section.ainvoke({"root_selector": "#items", "wait_ms": 0}, config=cfg_beta),
+                navigator.verify_selectors.ainvoke({"selectors_json": '{"items":".item"}', "wait_ms": 0}, config=cfg_beta),
+            ),
+        )
+
+        # Alpha는 초기 12개 + 1개 = 13개 (url_alpha), Beta는 초기 12개 + 2개 = 14개 (url_beta)여야 함
+        self.assertIn(url_alpha, skel_a)
+        self.assertIn("×13", skel_a)
+        self.assertIn("item-13", sec_a)
+        self.assertNotIn("item-14", sec_a)
+        self.assertIn("매칭 13건", ver_a)
+
+        self.assertIn(url_beta, skel_b)
+        self.assertIn("×14", skel_b)
+        self.assertIn("item-14", sec_b)
+        self.assertIn("매칭 14건", ver_b)
+
+        # 두 세션의 실제 Page 객체가 서로 다른 독립 탭인지 검증
+        page_alpha = await self.manager.get_page(wait_ms=0, session_id="sup_01_scraper_alpha")
+        page_beta = await self.manager.get_page(wait_ms=0, session_id="sup_01_scraper_beta")
+        self.assertIsNot(page_alpha, page_beta)
+        self.assertIsNot(page_alpha, self.page)
+        self.assertEqual(await page_alpha.locator("#term").input_value(), "alpha-secret")
+        self.assertEqual(await page_beta.locator("#term").input_value(), "beta-secret")
+        self.assertEqual(await page_alpha.evaluate("recorded"), ["alpha-secret"])
+        self.assertEqual(await page_beta.evaluate("recorded"), ["beta-secret"])
+
+        # CDP 재연결 후에도 두 세션 각각의 탭과 입력 상태가 독립적으로 복구되는지 검증
+        tid_alpha = await self.manager.page_target_id(page_alpha)
+        tid_beta = await self.manager.page_target_id(page_beta)
+        await self.manager._playwright.stop()
+
+        restored_alpha = await self.manager.get_page(wait_ms=0, session_id="sup_01_scraper_alpha")
+        restored_beta = await self.manager.get_page(wait_ms=0, session_id="sup_01_scraper_beta")
+        self.assertEqual(await self.manager.page_target_id(restored_alpha), tid_alpha)
+        self.assertEqual(await self.manager.page_target_id(restored_beta), tid_beta)
+        self.assertEqual(await restored_alpha.locator("#term").input_value(), "alpha-secret")
+        self.assertEqual(await restored_beta.locator("#term").input_value(), "beta-secret")
+
+    async def test_single_scraper_multi_tab_parallel_and_state_preservation(self):
+        """단일 스크래퍼(동일한 thread_id)가 tab_id('list', 'detail')를 다르게 지정하여
+        동시에 두 개의 탭에서 작업하고, 'detail' 탭을 다녀온 뒤에도 'list' 탭의 상태가 보존되는지 검증."""
+        cfg_single = {"configurable": {"thread_id": "sup_01_scraper_single"}}
+        url_list = self.url + "search-list"
+        url_detail = self.url + "item-detail-99"
+
+        # 1. 하나의 스크래퍼가 'list' 탭과 'detail' 탭을 동시에 조작
+        res_list, res_detail = await asyncio.gather(
+            navigator.interact_page.ainvoke(
+                {
+                    "url": url_list,
+                    "tab_id": "list",
+                    "actions_json": json.dumps([
+                        {"action": "fill", "selector": "#term", "value": "list-filter-kept"},
+                        {"action": "click", "selector": "#add"},
+                        {"action": "scroll", "direction": "down", "amount": 500},
+                    ]),
+                    "wait_ms": 0,
+                },
+                config=cfg_single,
+            ),
+            navigator.interact_page.ainvoke(
+                {
+                    "url": url_detail,
+                    "tab_id": "detail",
+                    "actions_json": json.dumps([
+                        {"action": "fill", "selector": "#term", "value": "detail-spec-view"},
+                        {"action": "click", "selector": "#add"},
+                        {"action": "click", "selector": "#add"},
+                        {"action": "click", "selector": "#add"},
+                    ]),
+                    "wait_ms": 0,
+                },
+                config=cfg_single,
+            ),
+        )
+        self.assertNotIn("[Error]", res_list)
+        self.assertNotIn("[Error]", res_detail)
+
+        # 2. 'detail' 탭을 url=""로 읽은 뒤 다시 'list' 탭을 url=""로 읽었을 때 각각의 상태가 온전히 유지되어야 함
+        sec_detail, sec_list = await asyncio.gather(
+            navigator.get_page_section.ainvoke(
+                {"root_selector": "#items", "tab_id": "detail", "wait_ms": 0},
+                config=cfg_single,
+            ),
+            navigator.get_page_section.ainvoke(
+                {"root_selector": "#items", "tab_id": "list", "wait_ms": 0},
+                config=cfg_single,
+            ),
+        )
+        self.assertIn(url_detail, sec_detail)
+        self.assertIn("item-15", sec_detail)
+        self.assertIn(url_list, sec_list)
+        self.assertIn("item-13", sec_list)
+        self.assertNotIn("item-14", sec_list)
+
+        page_list = await self.manager.get_page(wait_ms=0, session_id="sup_01_scraper_single", tab_id="list")
+        page_detail = await self.manager.get_page(wait_ms=0, session_id="sup_01_scraper_single", tab_id="detail")
+        self.assertIsNot(page_list, page_detail)
+        self.assertEqual(await page_list.locator("#term").input_value(), "list-filter-kept")
+        self.assertEqual(await page_detail.locator("#term").input_value(), "detail-spec-view")
+
+

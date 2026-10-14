@@ -15,6 +15,7 @@
 | **타임아웃 문제** | 2~5분 이상 긴 작업 시 **HTTP 연결 끊김 및 브라우저 타임아웃** 발생 | **타임아웃 없음** (즉시 응답 반환 후 서버 백그라운드에서 실행) |
 | **사용자 경험 (UX)** | 하위 작업이 끝날 때까지 **채팅창 전체가 멈춤(Freezing)** | 즉시 작업 접수 확인 메시지 수신, UI 멈춤 없이 대기 |
 | **결과 수신 방식** | 동기 대기 후 반환 | 작업 완료 즉시 시스템이 부모를 깨우는 **Reactive Wakeup**으로 자동 보고 |
+| **하위 에이전트 세션 관리** | 일회성 타임스탬프 스레드 (후속 지시 시 이전 단기 메모리 재사용 불가) | 호출마다 고유 `sub_thread_id` 자동 생성(동시 호출 시 메모리 완벽 격리) + 반환된 `sub_thread_id`로 재호출 시 Checkpointer 연속 작업 지원 |
 
 ---
 
@@ -48,8 +49,12 @@
 이미 완성형으로 제공된 `app/tools/supervisor_tools.py` 파일을 열고 다음 핵심 도구들의 역할을 확인하세요:
 
 1. **`list_sub_agents`**: 현재 서버에 등록된 호출 가능한 서브에이전트 목록 조회 (`GET /agents`)
-2. **`invoke_sub_agent`**: `run_in_background=True` 플래그를 지원하여, 작업을 서버 백그라운드 작업 큐에 등록하고 `[JOB SUBMITTED: job_xxx]`를 즉시 반환
-3. **`get_sub_agent_job_status`**: 진행 중인 특정 작업의 완료 여부 및 결과 보고서 조회 (`GET /jobs/{job_id}`)
+2. **`invoke_sub_agent`**:
+   - **`run_in_background=True` 비동기 실행**: 작업을 서버 백그라운드 작업 큐에 등록하고 `[JOB SUBMITTED]`(Job ID 및 Sub-Thread ID 포함)를 즉시 반환합니다.
+   - **세션 격리 및 연속 작업(`sub_thread_id`)**:
+     - **기본 호출(`sub_thread_id=None`)**: 호출할 때마다 고유한 `sub_thread_id`(`{supervisor_tid}_{role}_{uuid8}`)를 자동 생성하여, 동일한 `scraper`를 동시에 여러 개 호출해도 단기 메모리(Checkpointer)가 섞이지 않고 안전하게 격리됩니다.
+     - **연속 호출(`sub_thread_id` 지정)**: 도구 반환값이나 Reactive Wakeup 알림에 포함된 `Sub-Thread ID`를 `invoke_sub_agent(..., sub_thread_id="...")`로 다시 전달하면, 해당 서브에이전트의 기존 Checkpointer 메모리를 그대로 이어받아 후속 작업이나 `[BLOCKER]` 복구를 수행할 수 있습니다.
+3. **`get_sub_agent_job_status`**: 진행 중인 특정 작업의 완료 여부, `Sub-Thread ID` 및 결과 보고서 조회 (`GET /jobs/{job_id}`)
 
 ---
 
