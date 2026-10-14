@@ -345,4 +345,32 @@ class SharedBrowserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await page_list.locator("#term").input_value(), "list-filter-kept")
         self.assertEqual(await page_detail.locator("#term").input_value(), "detail-spec-view")
 
+    async def test_non_default_slot_popup_does_not_overwrite_default_slot(self):
+        """비기본 슬롯(session_id + tab_id)에서 target='_blank' 팝업이 열릴 때,
+        해당 슬롯만 새 팝업 탭으로 갱신되고 기본('default') 슬롯은 덮어써지지 않는지 검증."""
+        cfg_other = {"configurable": {"thread_id": "sup_01_scraper_popup"}}
+        page_other = await self.manager.get_page(
+            self.url, wait_ms=0, session_id="sup_01_scraper_popup", tab_id="detail"
+        )
+        await page_other.set_content(
+            f'<a id="popup-other" href="{self.url}popup-from-other" target="_blank">Popup Other</a>'
+        )
 
+        res = await navigator.interact_page.ainvoke(
+            {
+                "tab_id": "detail",
+                "actions_json": json.dumps([{"action": "click", "selector": "#popup-other"}]),
+                "wait_ms": 0,
+            },
+            config=cfg_other,
+        )
+        self.assertIn("click '#popup-other' 성공", res)
+        self.assertIn(self.url + "popup-from-other", res)
+
+        sec_other = await navigator.get_page_section.ainvoke(
+            {"root_selector": "#items", "tab_id": "detail", "wait_ms": 0},
+            config=cfg_other,
+        )
+        self.assertIn(self.url + "popup-from-other", sec_other)
+        # default 슬롯의 활성 탭은 여전히 self.page여야 함
+        self.assertIs(await self.manager.get_page(wait_ms=0), self.page)

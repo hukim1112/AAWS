@@ -170,6 +170,7 @@ class PlaywrightManager:
         self._target_ids_by_session: dict[str, Optional[str]] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._watched_contexts = set()
+        self._watched_pages = set()
         self._launch_lock = asyncio.Lock()
         self._operation_lock = asyncio.Lock()
         self._tab_alloc_lock = asyncio.Lock()
@@ -187,6 +188,7 @@ class PlaywrightManager:
         if page is None:
             self._pages_by_session.pop(slot, None)
         else:
+            self._watch_page(page)
             self._pages_by_session[slot] = page
 
     @property
@@ -381,6 +383,7 @@ class PlaywrightManager:
             self._browser = None
             self._pages_by_session.clear()
             self._watched_contexts.clear()
+            self._watched_pages.clear()
             if self._chrome_process is not None and self._chrome_process.returncode is None:
                 from playwright.async_api import async_playwright
                 self._playwright = await async_playwright().start()
@@ -394,6 +397,19 @@ class PlaywrightManager:
                 self._target_ids_by_session.clear()
                 await self._launch()
 
+    def _on_page_popup(self, opener_page, popup_page):
+        """새 창/탭(target='_blank', window.open)이 열렸을 때 해당 팝업을 연 슬롯만 새 탭으로 갱신합니다."""
+        self._watch_page(popup_page)
+        for slot, current_page in list(self._pages_by_session.items()):
+            if current_page is opener_page:
+                self._target_ids_by_session.pop(slot, None)
+                self._pages_by_session[slot] = popup_page
+
+    def _watch_page(self, page):
+        if page is not None and page not in self._watched_pages:
+            page.on("popup", lambda popup, opener=page: self._on_page_popup(opener, popup))
+            self._watched_pages.add(page)
+
     def _remember_page(
         self,
         page,
@@ -405,11 +421,11 @@ class PlaywrightManager:
         slot = _current_browser_slot_key(session_id, tab_id)
         if page is not self._pages_by_session.get(slot):
             self._target_ids_by_session.pop(slot, None)
+        self._watch_page(page)
         self._pages_by_session[slot] = page
 
     def _watch_context(self, context):
         if context not in self._watched_contexts:
-            context.on("page", self._remember_page)
             self._watched_contexts.add(context)
 
     @staticmethod
@@ -435,6 +451,7 @@ class PlaywrightManager:
             self._watch_context(context)
             for page in context.pages:
                 if not page.is_closed() and await self.page_target_id(page) == target_id:
+                    self._watch_page(page)
                     self._pages_by_session[slot] = page
                     self._target_ids_by_session[slot] = target_id
                     return page
@@ -1370,14 +1387,18 @@ async def browse_web(task: str, url: str = "", max_steps: int = 15, tab_id: str 
                 from browser_use import ChatOpenAI
                 llm = ChatOpenAI(model="gpt-4.1-mini")
                 
-                # 4. task에 가이드라인 프리펜드
+                # 4. task에 가이드라인 프리펜드 (다른 5개 브라우저 도구와 동일한 기본 탭·상태 유지 원칙 적용)
                 full_task = BROWSER_AGENT_GUIDE + "\n"
                 full_task += (
-                    f"[현재 공유 탭]\n{page.url}\n"
-                    f"[작업]\n현재 탭의 상태에서 다음을 수행하세요: {task}\n"
-                    "- 새 탭(new_tab=True)을 열지 말고 반드시 현재 탭(new_tab=False)에서 이동·작업하세요.\n"
-                    "- 입력값·스크롤·로그인 상태를 유지하고, 작업에 필요한 경우에만 이동하거나 새로고침하세요.\n"
-                    "- 작업 완료 후에도 후속 분석을 위해 현재 탭을 닫지 말고 열어 두세요."
+                    f"[현재 포커스된 탭 URL]\n{page.url}\n"
+                    f"[작업 지시]\n{task}\n\n"
+                    "[탭 및 상태 관리 원칙]\n"
+                    "1. 기본 탭 작업 원칙: 작업 지시(task)에서 명시적으로 '새 탭 열기'를 요구하지 않는 한, "
+                    "새 탭(new_tab=True)을 열지 말고 현재 포커스된 탭(new_tab=False)에서 모든 이동과 조작을 수행하세요.\n"
+                    "2. 상태 유지 vs 페이지 이동 구분:\n"
+                    "   - 현재 페이지 내에서 후속 작업(검색, 필터, 클릭, 스크롤 등)을 이어갈 때는 불필요한 새로고침을 피해 입력값·스크롤·로그인 세션을 유지하세요.\n"
+                    "   - 작업 지시에 따라 다른 URL이나 사이트로 이동해야 할 때는 이전 페이지를 보존하려고 새 탭을 열지 말고, 현재 탭에서 바로 해당 URL로 이동(navigate with new_tab=False)하세요.\n"
+                    "3. 작업 완료 후에도 후속 도구(get_page_section 등)가 결과를 이어서 분석할 수 있도록 현재 탭을 닫지 말고 열어 두세요."
                 )
                 
                 # 5. Agent 실행 (이미 PlaywrightManager가 탭 포커스 및 초기 이동을 처리했으므로 directly_open_url=False)
