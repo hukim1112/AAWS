@@ -1315,7 +1315,7 @@ BROWSER_AGENT_GUIDE = """[당신의 역할]
 
 [효율적 행동 원칙]
 1. evaluate는 단독 사용: evaluate()는 다른 액션과 같은 스텝에 넣지 마세요. URL 확인은 최초 1회만 단독 스텝으로 실행하세요.
-2. 읽기 > 클릭: 텍스트나 URL 확보가 목적이라면, 클릭(페이지 전환 유발) 대신 find_elements로 속성을 직접 읽으세요.
+2. 읽기 > 클릭: 텍스트나 URL 확보가 목적이라면 불필요한 클릭(페이지 전환 유발)을 피하세요. 현재 <browser_state>에 이미 표시된 텍스트는 추가 도구 호출 없이 바로 읽고, <browser_state>에 보이지 않는 속성(href, src 등)이나 DOM 구조 확인이 필요할 때만 find_elements 또는 search_page로 조회하세요.
 3. 반복 금지: 동일한 액션을 2번 이상 반복하지 마세요. 같은 셀렉터, 같은 evaluate 코드, 같은 URL로의 navigate 모두 해당됩니다.
 4. 광고/트래킹 URL 구별: bridge, redirect, ad 등의 키워드가 포함된 URL은 무시하고 실제 콘텐츠 URL 패턴을 찾으세요.
 5. 빠른 실패 보고: 페이지 내용이 목적과 전혀 다르면 즉시 실패(success=False)를 보고하여 스텝 예산 낭비를 막으세요.
@@ -1416,6 +1416,24 @@ async def browse_web(task: str, url: str = "", max_steps: int = 15, tab_id: str 
                     max_actions_per_step=3,
                     directly_open_url=False,
                 )
+                # browser-use 0.11.x 버그 보정: find_elements / search_page 등이
+                # long_term_memory와 extracted_content를 동시에 반환할 때
+                # include_extracted_content_only_once=False(기본값)이면 MessageManager의
+                # if/elif 분기에서 extracted_content가 누락되어 LLM에 전달되지 않는 현상 수정
+                orig_update_history = agent._message_manager._update_agent_history_description
+                def _patched_update_history(model_output=None, result=None, step_info=None):
+                    if result:
+                        for r in result:
+                            if (
+                                getattr(r, "extracted_content", None)
+                                and getattr(r, "long_term_memory", None)
+                                and not getattr(r, "is_done", False)
+                            ):
+                                r.include_extracted_content_only_once = True
+                    return orig_update_history(
+                        model_output=model_output, result=result, step_info=step_info
+                    )
+                agent._message_manager._update_agent_history_description = _patched_update_history
                 history = await agent.run(max_steps=max_steps)
                 
                 # 6. 결과 포맷팅 (탭 인계와 세션 연결 정리는 finally에서 수행)
