@@ -294,6 +294,10 @@ class PlaywrightManager:
             "--no-default-browser-check",
             "--disable-extensions",
             "--disable-gpu",
+            # 멀티탭/멀티스크래퍼 환경에서 백그라운드 탭 렌더링·타이머 절전(Throttling) 방지
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-background-timer-throttling",
             # locale/UA 설정 (new_context 대신 Chrome 프로세스 레벨에서 적용)
             "--lang=ko",
             "--accept-lang=ko-KR,ko",
@@ -1279,6 +1283,8 @@ async def take_screenshot(url: str = "", selector: str = "", full_page: bool = T
         return f"[Error] 페이지 로드 실패: {e}"
     
     try:
+        # 멀티탭 환경에서 백그라운드 탭의 Compositor 프레임 생성이 멈춰 타임아웃되는 현상 방지
+        await page.bring_to_front()
         if selector:
             # 특정 요소만 캡처
             element = await page.query_selector(selector)
