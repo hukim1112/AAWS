@@ -106,7 +106,6 @@ async def create_agent_executor():
         model=llm,
         tools=active_tools,
         system_prompt=CHATBOT_SYSTEM_PROMPT,
-        middleware=middleware,
         checkpointer=checkpointer,
         context_schema=AgentContext
     )
