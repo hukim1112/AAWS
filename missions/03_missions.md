@@ -214,27 +214,34 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 
 from app.utils import init_chat_model
-from app.utils.context import AgentContext
+from app.context import AgentContext
 from .prompt import SUPERVISOR_SYSTEM_PROMPT
 from .tools import tools_supervisor
 
 AGENT_METADATA = {
     "name": "supervisor",
-    "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트"
+    "description": "사용자의 요청을 수행하며 필요 시 계획을 수립하고 전문 에이전트(Scraper 등)에게 위임하는 메인 어시스턴트",
+    "roles": ["main"],  # UI 대화 전용 (서브에이전트 위임 대상에서 제외)
 }
 
-async def create_agent_executor():
+async def create_agent_executor(checkpointer=None):
     # 1. LLM 초기화
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
     
     # 2. AsyncSqliteSaver 체크포인터 설정
-    db_dir = "app/database"
-    os.makedirs(db_dir, exist_ok=True)
-    checkpoints_path = os.path.join(db_dir, "checkpoints.db")
-    
-    conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-    checkpointer = AsyncSqliteSaver(conn)
-    await checkpointer.setup()
+    #    - FastAPI 서버는 공유 checkpointer를 인자로 주입합니다 (서버 실행 시).
+    #    - 노트북/스크립트처럼 단독 실행할 때만 직접 연결을 엽니다.
+    conn = None
+    if checkpointer is None:
+        db_dir = "app/database"
+        os.makedirs(db_dir, exist_ok=True)
+        checkpoints_path = os.path.join(db_dir, "checkpoints.db")
+        
+        conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
+        await conn.execute("PRAGMA journal_mode=WAL;")      # 동시 읽기/쓰기 허용
+        await conn.execute("PRAGMA busy_timeout=5000;")     # 'database is locked' 방지
+        checkpointer = AsyncSqliteSaver(conn)
+        await checkpointer.setup()
     
     # 3. Supervisor 에이전트 생성
     supervisor_agent = create_agent(
@@ -244,6 +251,7 @@ async def create_agent_executor():
         checkpointer=checkpointer,
         context_schema=AgentContext
     )
+    supervisor_agent.checkpointer_conn = conn  # 서버 종료 시 정리용
     return supervisor_agent
 ```
 
@@ -276,6 +284,10 @@ chainlit run app/chainlit_ui.py --port 8080
 http://quotes.toscrape.com 사이트에서 1~2페이지의 명언(text, author, tags)을 수집해서 
 'artifacts/data/quotes_multiagent.json' 파일로 저장하고, 수집된 결과 요약을 보고해줘.
 ```
+
+> 💡 **파일 저장 위치 참고**: 계획 보드(`plan_state.json`, `task_state.json`)는 세션별로 `artifacts/users/{user_id}/sessions/{session_id}/`에 분리 저장되지만,
+> 수집 결과(`artifacts/data/...`)는 요청한 경로 그대로 공유 `artifacts/` 폴더에 저장됩니다 (교육용 단순화 설계).
+> 저장 경로를 지정하지 않으면 Scraper는 위임 지시문에 안내된 서브에이전트 전용 폴더(`artifacts/users/.../subagents/...`)에 결과를 만들 수 있습니다.
 
 #### 🧪 실행 궤적(Trajectory) 관찰 포인트:
 1. **Supervisor의 자율적 계획 수립**: 작업 규모를 판단하여 Task Board에 계획 및 세부 태스크 등록

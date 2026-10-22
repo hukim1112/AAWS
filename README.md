@@ -172,12 +172,21 @@ AAWS/
 │   ├── scenarios/          #   ├── 9개 난이도별 시나리오 명세서 (.md)
 │   ├── runs/               #   ├── 평가 실행 결과 (실험별 격리 저장, gitignored)
 │   ├── data/               #   ├── 에이전트가 수집한 데이터 (gitignored)
+│   ├── users/              #   ├── 세션별 계획 보드(plan_state.json, task_state.json) 격리 저장소 (gitignored)
 │   └── code/, notebooks/   #   └── 노트북 실습용 샘플 데이터
 ├── configs/                # ⚙️ HITL, 로깅 등 런타임 설정
 ├── install/                # 🔧 환경 설치 스크립트 모음
 ├── start_vnc.sh            # 🖥️ VNC + noVNC 구동 스크립트
 └── README.md               # 📖 프로젝트 메인 명세서
 ```
+
+> [!NOTE]
+> **산출물 저장 위치 정책 (교육용 단순화)**
+> - 대화 이력은 `app/database/checkpoints.db`(LangGraph `AsyncSqliteSaver`, WAL 모드) 하나에만 저장되며, UI의 세션 목록·메시지 조회도 이 체크포인트를 그대로 읽습니다.
+> - **세션 격리는 계획 보드에만 적용됩니다.** Supervisor의 계획 보드(`plan_state.json`/`task_state.json`)는 `artifacts/users/{user_id}/sessions/{session_id}/`에 세션별로 분리되어, 여러 대화창에서 계획이 섞이지 않습니다.
+> - 반면 에이전트가 만드는 **수집 데이터·차트·보고서는 사용자가 지정한 경로 그대로 공유 `artifacts/` 폴더**(`artifacts/data/`, `artifacts/reports/` 등)에 저장됩니다. 실습 경로를 단순하게 유지하기 위한 의도된 설계이므로, 같은 파일명으로 여러 세션을 동시에 실행하면 결과 파일이 덮어써질 수 있습니다.
+> - 예외적으로 Supervisor가 `invoke_sub_agent`로 위임할 때 `target_file_list`를 비워 두면, 지시문에 안내된 서브에이전트 전용 폴더(`artifacts/users/{user_id}/sessions/{supervisor_session}/subagents/...`)에 산출물이 생성될 수 있습니다.
+> - 산출물까지 세션 단위로 완전히 격리하는 구조(프롬프트에 `workspace_dir` 동적 주입)는 Harness Agent 과정의 `PromptAssembler`에서 다룹니다.
 
 ---
 

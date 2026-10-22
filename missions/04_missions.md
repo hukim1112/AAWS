@@ -20,7 +20,7 @@
 ---
 
 ## 📂 실습 대상 및 핵심 파일
-* **제공된 프로덕션 도구 모듈**: `app/tools/supervisor_tools.py` (구현 난이도 상 강사가 미리 구현하였음.)
+* **제공된 프로덕션 도구 모듈**: `app/tools/supervisor_tools.py` (이미 구현 완비)
 * **프롬프트 업그레이드 대상**: `app/agents/supervisor/prompt.py` (비동기 위임 원칙 및 렌더링 태그 반영)
 * **도구 교체 대상 파일**: `app/agents/supervisor/tools.py` (프로덕션 도구로 교체 바인딩)
 * **에이전트 팩토리 파일**: `app/agents/supervisor/agent.py` (연동 확인)

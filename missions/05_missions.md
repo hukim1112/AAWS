@@ -50,14 +50,17 @@ Supervisor 아래에 어떤 전문 영역의 에이전트를 둘 것인지는 **
 import os
 import json
 import asyncio
+import aiosqlite
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from app.utils import init_chat_model
 from app.tools.common import file_read, file_writer, bash_command, glob_search
-from app.utils.context import AgentContext
+from app.context import AgentContext
 
 AGENT_METADATA = {
     "name": "custom_worker",  # 여러분의 에이전트 이름 (소문자 권장)
-    "description": "특정 전문 작업을 수행하는 서브 에이전트"
+    "description": "특정 전문 작업을 수행하는 서브 에이전트",
+    "roles": ["main", "sub"],  # "sub"가 있어야 Supervisor의 위임 대상(list_sub_agents)에 노출됩니다
 }
 
 # 1. 서브 에이전트 전용 시스템 프롬프트 정의
@@ -78,8 +81,19 @@ WORKER_SYSTEM_PROMPT = """
 """
 
 # 2. 에이전트 팩토리 함수 (이 함수가 있어야 서버가 자동 로드합니다)
-async def create_agent_executor():
+async def create_agent_executor(checkpointer=None):
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
+    
+    # 체크포인터: 서버가 공유 checkpointer를 주입하며, 단독 실행 시에만 직접 연결합니다.
+    # (체크포인터가 없으면 서브에이전트 대화가 저장되지 않아 sub_thread_id 이어서 작업하기가 불가능합니다)
+    conn = None
+    if checkpointer is None:
+        os.makedirs("app/database", exist_ok=True)
+        conn = await aiosqlite.connect("app/database/checkpoints.db", check_same_thread=False)
+        await conn.execute("PRAGMA journal_mode=WAL;")
+        await conn.execute("PRAGMA busy_timeout=5000;")
+        checkpointer = AsyncSqliteSaver(conn)
+        await checkpointer.setup()
     
     # 에이전트에게 필요한 도구 목록 선택
     tools = [file_read, file_writer, bash_command, glob_search]
@@ -88,8 +102,10 @@ async def create_agent_executor():
         model=llm,
         tools=tools,
         system_prompt=WORKER_SYSTEM_PROMPT,
+        checkpointer=checkpointer,
         context_schema=AgentContext
     )
+    agent.checkpointer_conn = conn
     return agent
 ```
 
