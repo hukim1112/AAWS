@@ -49,7 +49,7 @@ class FakeAsyncAgentClient:
     async def get_messages(self, session_id: str):
         return list(self.sessions.get(session_id, []))
 
-    async def async_invoke(self, agent_name: str, message: str, thread_id: str = None):
+    async def async_invoke(self, agent_name: str, message: str, thread_id: str = None, **kwargs):
         self.invocations.append(
             {
                 "mode": "sync",
@@ -71,6 +71,7 @@ class FakeAsyncAgentClient:
         thread_id: str = None,
         callback_agent: str = "supervisor",
         callback_thread_id: str = None,
+        **kwargs,
     ):
         FakeAsyncAgentClient.job_counter += 1
         job_id = f"job_test_{FakeAsyncAgentClient.job_counter:04d}"
@@ -307,11 +308,10 @@ class SubAgentSessionIsolationTests(unittest.IsolatedAsyncioTestCase):
                 )
 
                 # 1. 두 백그라운드 잡 동시 실행
-                with patch("app.server.add_message"):
-                    await asyncio.gather(
-                        server_mod._run_agent_job("job_a", "scraper", input_a, fake_app),
-                        server_mod._run_agent_job("job_b", "scraper", input_b, fake_app),
-                    )
+                await asyncio.gather(
+                    server_mod._run_agent_job("job_a", "scraper", input_a, fake_app),
+                    server_mod._run_agent_job("job_b", "scraper", input_b, fake_app),
+                )
 
                 self.assertEqual(server_mod.job_store["job_a"]["status"], "SUCCESS")
                 self.assertEqual(server_mod.job_store["job_b"]["status"], "SUCCESS")
@@ -343,10 +343,9 @@ class SubAgentSessionIsolationTests(unittest.IsolatedAsyncioTestCase):
                     callback_agent="supervisor",
                     callback_thread_id=sup_tid,
                 )
-                with patch("app.server.add_message"):
-                    await server_mod._run_agent_job(
-                        "job_a_followup", "scraper", input_a_followup, fake_app
-                    )
+                await server_mod._run_agent_job(
+                    "job_a_followup", "scraper", input_a_followup, fake_app
+                )
 
                 state_a_after = await sub_executor.aget_state({"configurable": {"thread_id": sub_tid_a}})
                 msgs_a_after = [m.content for m in state_a_after.values["messages"]]

@@ -111,8 +111,15 @@ async def submit_agent_job(
     if agent_name not in available:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found.")
 
+    # 요청 시점에 세션 컨텍스트(user_id, 부모 세션, 워크스페이스)를 미리 해석해 워커에 전달
+    effective_parent_tid = input_data.parent_thread_id or input_data.callback_thread_id
+    context_obj, config = await _resolve_run(
+        agent_name, input_data.thread_id, user_id=input_data.user_id,
+        parent_thread_id=effective_parent_tid, force_disable_hitl=True,
+    )
+
     job_id = f"job_{uuid.uuid4().hex[:8]}"
-    created_at = datetime.now(datetime.UTC).isoformat() + "Z"
+    created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     job_store[job_id] = {
         "job_id": job_id,
         "agent_name": agent_name,
@@ -127,7 +134,7 @@ async def submit_agent_job(
     }
 
     # 백그라운드 코루틴 등록
-    background_tasks.add_task(_run_agent_job, job_id, agent_name, input_data, request.app)
+    background_tasks.add_task(_run_agent_job, job_id, agent_name, input_data, context_obj, config, request.app)
     return {"job_id": job_id, "status": "SUBMITTED", "agent_name": agent_name}
 ```
 
@@ -163,26 +170,32 @@ async def list_session_jobs(thread_id: str):
 서브에이전트가 작업을 마친 직후, 서버가 `callback_agent`(`supervisor`)를 직접 호출하여 후속 작업을 트리거합니다:
 
 ```python
-async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInput, app: FastAPI):
+async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInput,
+                              context_obj: AgentContext, config: dict, app: FastAPI):
     job = job_store.get(job_id)
     if not job:
         return
     job["status"] = "RUNNING"
 
     try:
-        # 1. 서브에이전트 로드 및 실행
+        # 1. 서브에이전트 로드 및 실행 (세션별 plan 스코프 + 동일 thread 직렬화)
         agent_executor = await get_or_load_agent(agent_name, app)
-        config = {"configurable": {"thread_id": input_data.thread_id}, "recursion_limit": 100}
 
-        result = await agent_executor.ainvoke(
-            {"messages": [("user", input_data.message)]},
-            config=config,
-            context=context_obj
-        )
-        task_report = sanitize_text(normalize_content(result["messages"][-1].content))
+        async def _execute_subagent() -> str:
+            with plan_session_scope(input_data.thread_id, user_id=context_obj.user_id,
+                                    parent_session_id=context_obj.parent_session_id):
+                result = await agent_executor.ainvoke(
+                    {"messages": [("user", input_data.message)]},
+                    config=config,
+                    context=context_obj,
+                )
+            return sanitize_text(normalize_content(result["messages"][-1].content))
+
+        async with acquire_thread_slot(input_data.thread_id):   # 같은 thread 동시 실행 방지
+            task_report = await _execute_subagent()
 
         job["status"] = "SUCCESS"
-        job["completed_at"] = datetime.now(datetime.UTC).isoformat() + "Z"
+        job["completed_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         job["result"] = task_report
 
         # 2. 🌟 Reactive Agent Wakeup: 서브에이전트 완료 즉시 Supervisor 자동 호출
@@ -199,27 +212,30 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
                 f"- Sub-Thread ID: {input_data.thread_id} (use sub_thread_id='{input_data.thread_id}' to continue this agent)\n"
                 f"- Report Content:\n{task_report}\n\n"
                 f"[INSTRUCTION FOR SUPERVISOR]\n"
-                f"위 서브에이전트의 완료 보고서와 생성된 산출물을 바탕으로 다음 작업을 수행하거나 유저에게 답변합니다 "
-                f"생성된 차트 이미지나 HTML 대시보드가 있다면 UI 렌더링 태그(<Render_HTML>, <Render_Image>, <Render_File>)를 통해 출력 가능합니다."
+                f"위 서브에이전트의 완료 보고서와 생성된 산출물을 바탕으로 다음 작업을 수행하거나 유저에게 답변합니다 ..."
             )
 
-            cb_config = {"configurable": {"thread_id": cb_thread_id}, "recursion_limit": 100}
-            cb_lock = wakeup_locks.setdefault(cb_thread_id, asyncio.Lock())
-            async with cb_lock:
-                add_message(cb_thread_id, "user", trigger_prompt)
-                sup_result = await cb_executor.ainvoke(
-                    {"messages": [("user", trigger_prompt)]},
-                    config=cb_config,
-                    context=context_obj
-                )
-                sup_response = sanitize_text(normalize_content(sup_result["messages"][-1].content))
-                add_message(cb_thread_id, "assistant", sup_response)
-                job["supervisor_response"] = sup_response
+            cb_context_obj, cb_config = await _resolve_run(
+                cb_agent, cb_thread_id, user_id=context_obj.user_id, force_disable_hitl=True
+            )
+            # 사용자가 같은 세션에서 대화 중이면 그 턴이 끝날 때까지 대기 (thread lock 공유)
+            async with acquire_thread_slot(cb_thread_id):
+                with plan_session_scope(cb_thread_id, user_id=cb_context_obj.user_id):
+                    # ainvoke 한 번으로 trigger 메시지 + Supervisor 응답이 checkpoints.db에 함께 저장됨
+                    # (별도 chat 메시지 테이블에 이중 기록(add_message)하지 않음 — checkpointer가 단일 진실 공급원)
+                    sup_result = await cb_executor.ainvoke(
+                        {"messages": [("user", trigger_prompt)]},
+                        config=cb_config,
+                        context=cb_context_obj,
+                    )
+                job["supervisor_response"] = sanitize_text(normalize_content(sup_result["messages"][-1].content))
 
     except Exception as e:
         job["status"] = "FAILED"
         job["error"] = str(e)
 ```
+
+> 💡 **대화 이력 저장 방식**: 서버는 모든 에이전트에 공유 `AsyncSqliteSaver`(`app/database/checkpoints.db`, WAL 모드)를 주입합니다. UI가 조회하는 `/sessions/{id}/messages`도 이 체크포인트에서 직접 읽어오므로, Wakeup으로 추가된 Supervisor 응답이 별도 저장 코드 없이 채팅 이력에 그대로 나타납니다. (서버가 주입한 `[SYSTEM NOTIFICATION: ...]` 트리거 메시지는 체크포인트에는 남지만, UI 조회 시에는 자동으로 숨겨집니다.)
 
 > **핵심 교훈**: 이벤트 기반 에이전트 오케스트레이션의 핵심은 "완료 콜백에서의 능동형 재호출(Wakeup)"이다. 이를 통해 사용자가 기다릴 필요 없이 백그라운드 완료 즉시 최종 산출물이 전달된다.
 

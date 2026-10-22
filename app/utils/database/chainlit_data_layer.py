@@ -11,7 +11,7 @@ import os
 import json
 import uuid
 import aiosqlite
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from chainlit.data.base import BaseDataLayer
@@ -151,7 +151,7 @@ class ChainlitSQLiteDataLayer(BaseDataLayer):
     async def create_user(self, user: User) -> Optional[PersistedUser]:
         """사용자를 생성하거나, 이미 존재하면 metadata를 갱신합니다."""
         user_id = str(uuid.uuid4())
-        created_at = datetime.utcnow().isoformat() + "Z"
+        created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         meta_str = json.dumps(user.metadata or {})
 
         async with self._connect() as db:
@@ -251,7 +251,7 @@ class ChainlitSQLiteDataLayer(BaseDataLayer):
         if not thread_id:
             return
 
-        created_at = datetime.utcnow().isoformat() + "Z"
+        created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         async with self._connect() as db:
             await db.execute(
@@ -468,7 +468,7 @@ class ChainlitSQLiteDataLayer(BaseDataLayer):
         userIdentifier에는 사용자 식별자 문자열(예: 'admin')을 저장해야
         get_thread_author()의 인증 비교가 정상 동작합니다.
         """
-        created_at = datetime.utcnow().isoformat() + "Z"
+        created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         tags_str = json.dumps(tags or [])
         meta_str = json.dumps(metadata or {})
 

@@ -20,7 +20,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from app.middleware import SkillCatalogMiddleware
 from app.utils import init_chat_model
-from app.utils.context import AgentContext
+from app.context import AgentContext
 
 from .prompt import BASE_ANALYST_SYSTEM_PROMPT, get_skill_prompt_builder
 from .tools import tools_analyst
@@ -28,21 +28,28 @@ from .tools import tools_analyst
 AGENT_METADATA = {
     "name": "analyst",
     "description": "데이터 분석·시각화·보고서 전문 에이전트 — 데이터 프로파일링, 차트 생성, Excel/HTML 보고서를 생성합니다.",
+    "roles": ["main", "sub"],
 }
 
 
-async def create_agent_executor():
+async def create_agent_executor(checkpointer=None):
     # 1. LLM 설정
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
 
     # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
-    db_dir = "app/database"
-    os.makedirs(db_dir, exist_ok=True)
-    checkpoints_path = os.path.join(db_dir, "checkpoints.db")
+    conn = None
+    if checkpointer is None:
+        db_dir = "app/database"
+        os.makedirs(db_dir, exist_ok=True)
+        checkpoints_path = os.path.join(db_dir, "checkpoints.db")
 
-    conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-    checkpointer = AsyncSqliteSaver(conn)
-    await checkpointer.setup()
+        conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
+
+        await conn.execute("PRAGMA journal_mode=WAL;")
+
+        await conn.execute("PRAGMA busy_timeout=5000;")
+        checkpointer = AsyncSqliteSaver(conn)
+        await checkpointer.setup()
 
     # 3. 미들웨어 구성 (SkillCatalogMiddleware: 스킬 카탈로그 동적 주입)
     middleware = [SkillCatalogMiddleware(get_skill_prompt_builder())]
@@ -56,5 +63,5 @@ async def create_agent_executor():
         checkpointer=checkpointer,
         context_schema=AgentContext,
     )
+    analyst_agent.checkpointer_conn = conn
     return analyst_agent
-

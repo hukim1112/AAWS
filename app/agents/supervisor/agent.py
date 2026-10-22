@@ -18,7 +18,7 @@ import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from app.utils import init_chat_model
-from app.utils.context import AgentContext
+from app.context import AgentContext
 
 from .prompt import SUPERVISOR_SYSTEM_PROMPT
 from .tools import tools_supervisor
@@ -26,21 +26,28 @@ from .tools import tools_supervisor
 AGENT_METADATA = {
     "name": "supervisor",
     "description": "멀티에이전트 총괄 오케스트레이터 — 계획 수립 후 Scraper/Analyst 등 전문 에이전트에게 작업을 위임하고 결과를 종합하여 보고합니다.",
+    "roles": ["main"],
 }
 
 
-async def create_agent_executor():
+async def create_agent_executor(checkpointer=None):
     # 1. LLM 설정
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
 
     # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
-    db_dir = "app/database"
-    os.makedirs(db_dir, exist_ok=True)
-    checkpoints_path = os.path.join(db_dir, "checkpoints.db")
+    conn = None
+    if checkpointer is None:
+        db_dir = "app/database"
+        os.makedirs(db_dir, exist_ok=True)
+        checkpoints_path = os.path.join(db_dir, "checkpoints.db")
 
-    conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-    checkpointer = AsyncSqliteSaver(conn)
-    await checkpointer.setup()
+        conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
+
+        await conn.execute("PRAGMA journal_mode=WAL;")
+
+        await conn.execute("PRAGMA busy_timeout=5000;")
+        checkpointer = AsyncSqliteSaver(conn)
+        await checkpointer.setup()
 
     # 3. Supervisor 에이전트 구축
     #    tools_supervisor = Planning(5) + Orchestration(3) + Common(6) = 14종
@@ -51,4 +58,5 @@ async def create_agent_executor():
         checkpointer=checkpointer,
         context_schema=AgentContext,
     )
+    supervisor_agent.checkpointer_conn = conn
     return supervisor_agent

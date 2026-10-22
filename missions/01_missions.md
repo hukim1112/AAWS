@@ -97,8 +97,10 @@ CHATBOT_SYSTEM_PROMPT = f"""당신은 귀엽고 친밀한 고양이 페르소나
 오늘의 날짜 : {date.today().strftime("%Y-%m-%d")}
 """
 
-async def create_agent_executor():
-    # ...
+async def create_agent_executor(checkpointer=None):
+    # ... (기존 코드 유지: llm 초기화 + checkpointer가 None일 때만 AsyncSqliteSaver 생성)
+    # ※ FastAPI 서버(app/server.py)는 공유 checkpointer를 인자로 주입합니다.
+    #    `checkpointer=None` 시그니처를 지워버리면 서버와 체크포인터 연결이 분리되니 반드시 유지하세요.
     # 3. tools_chatbot 목록에 커스텀 기억 도구들 추가
     active_tools = tools_chatbot + [read_user_memory, update_user_memory]
     
