@@ -47,6 +47,7 @@ GitHub Codespaces 환경에서는 사전 빌드된 Docker 이미지(`agent_lab`)
    TAVILY_API_KEY="your-tavily-api-key"
    DISPLAY=":1"          # noVNC 가상 디스플레이 포트
    HEADLESS="true"       # true: 백그라운드 실행 / false: VNC 데스크톱 화면에서 브라우저 시청
+   # CHAINLIT_AUTH_SECRET="..."  # 자동 생성됨 (.env를 수동 생성할 때만 chainlit create-secret으로 발급)
    ```
    > 💡 **Tavily API 키 발급 안내**:  
    > 에이전트의 실시간 웹 검색(`web_search`) 기능을 사용하려면 **[tavily.com](https://tavily.com)** 에 접속하여 회원가입 후 무료 API 키를 발급받아 `TAVILY_API_KEY`에 입력하세요.
@@ -117,9 +118,9 @@ notebooks/
 | 단계 | 노트북 | 핵심 학습 목표 |
 |:---:|--------|------------|
 | **1** | `1_Create_agent` | LangChain 1.x `create_agent` 팩토리, ReAct 루프, 커스텀 도구 바인딩 |
-| **2** | `2_Coder` | `file_writer` + `bash_command` 기반 코드 자동 생성 및 디버깅 루프 |
+| **2** | `2_Coder` | `common.py` 코딩·탐색 도구 6종 및 ACI 에러 피드백 기반 자가 디버깅 루프 |
 | **3** | `3_Navigator` | DOM 스켈레톤 추출, 셀렉터 검증, 페이지 인터랙션, browser-use 자율 탐색 |
-| **4** | `4_MultiAgent_Orchestration` | Agent-as-Tool 패턴, Context Isolation, Planning 도구, `invoke_sub_agent` |
+| **4** | `4_MultiAgent_Orchestration` | Agent-as-Tool 패턴, Context Isolation, Plan Mode(`enter_plan`/`exit_plan`), `invoke_sub_agent` |
 
 ### 🎯 실습 미션 (프로덕션 코드 구축)
 
@@ -128,7 +129,7 @@ missions/
 ├── 01_missions.md    # 🧠 커스텀 기억 도구(읽기/갱신) 구현 및 Chatbot 연결
 ├── 02_missions.md    # 🧪 Scraper 시나리오 자동 평가 실행 및 아티팩트 분석
 ├── 03_missions.md    # 👑 Supervisor 멀티에이전트 구축 및 Scraper 위임 (Blackboard 패턴)
-├── 04_missions.md    # ⚡ Long-Running Agent 아키텍처 연동 및 Prompt-as-Code 리팩토링
+├── 04_missions.md    # ⚡ Long-Running 비동기 작업 큐 및 Reactive Wakeup 오케스트레이션 업그레이드
 └── 05_missions.md    # 🎨 [Capstone] 나만의 커스텀 서브 에이전트 기획·개발 및 플러그인 연동
 ```
 
@@ -149,30 +150,31 @@ AAWS/
 ├── app/                    # 🧠 에이전트 시스템 코어 패키지
 │   ├── agents/             #   ├── 독립 패키지형 에이전트 모듈 (agent.py, prompt.py, tools.py)
 │   │   ├── chatbot.py      #   │   ├── 대화형 챗봇 (기억 도구 연동)
-│   │   ├── scraper/        #   │   ├── 웹 스크래퍼 패키지 (브라우저 탐색/코드작성/자가치유)
+│   │   ├── scraper/        #   │   ├── 웹 스크래퍼 패키지 (브라우저 탐색/코드작성/자가치유, 전용 skills/ 내장)
 │   │   ├── supervisor/     #   │   ├── 총괄 오케스트레이터 패키지 (계획 수립 & 서브에이전트 비동기 위임)
-│   │   └── analyst/        #   │   └── [Capstone] 데이터 분석·시각화 전문 에이전트 패키지
-│   ├── tools/              #   ├── 에이전트 공용 도구 모음 (common, navigator, plan, supervisor_tools)
+│   │   └── analyst/        #   │   └── [Capstone] 데이터 분석·시각화 에이전트 (Mission 05 구현 예시, instructor 포함)
+│   ├── tools/              #   ├── 에이전트 공용 도구 모음 (common, navigator, plan, supervisor_tools, custom_tools)
 │   ├── prompts/            #   ├── 공통 프롬프트 템플릿 및 동적 스킬 빌더 (skill_builder.py)
 │   ├── database/           #   ├── 사용자 기억(USER.md), 대화 DB
-│   ├── middleware/         #   ├── HITL 미들웨어
+│   ├── middleware/         #   ├── 스킬 카탈로그 동적 주입 및 계층형 실행 시각화 미들웨어
 │   ├── utils/              #   ├── LLM 초기화, 메시지 유틸, DB 레이어
 │   ├── server.py           #   ├── FastAPI 에이전트 API 서버 (동적 에이전트 로더)
 │   ├── chainlit_ui.py      #   ├── Chainlit 채팅 프론트엔드
-│   ├── streamlit_ui.py     #   ├── Streamlit 채팅 프론트엔드
+│   ├── streamlit_ui.py     #   ├── Streamlit 채팅 프론트엔드 (보조/호환용)
 │   └── client.py           #   └── 터미널 테스트 CLI 클라이언트
 ├── public/                 # 🎨 프론트엔드 커스텀 UI 에셋 (HtmlDashboard.jsx)
-├── skills/                 # 📚 에이전트 스킬 정의
+├── skills/                 # 📚 공용 레퍼런스 스킬 모음 (에이전트별 도메인 스킬은 app/agents/*/skills/ 위치)
 ├── evaluate/               # 🧪 시나리오 자동 평가 프레임워크
 │   ├── run_scraper_scenarios.py  #   ├── 평가 러너 (전체 시나리오 순차 실행)
 │   ├── evaluator.py              #   ├── LLM-as-a-Judge 채점 엔진
 │   ├── evaluate_config.yaml      #   ├── 실행할 시나리오 목록 설정
 │   └── scenario_parser.py        #   └── 시나리오 마크다운 파서
+├── tests/                  # 🧪 도구·세션 격리·스킬 단위/통합 테스트 모음 (pytest)
 ├── artifacts/              # 📂 에이전트 산출물 저장소
 │   ├── scenarios/          #   ├── 9개 난이도별 시나리오 명세서 (.md)
 │   ├── runs/               #   ├── 평가 실행 결과 (실험별 격리 저장, gitignored)
 │   ├── data/               #   ├── 에이전트가 수집한 데이터 (gitignored)
-│   ├── users/              #   ├── 세션별 계획 보드(plan_state.json, task_state.json) 격리 저장소 (gitignored)
+│   ├── users/              #   ├── 세션별 계획 보드(plan_state.json, task_state.json, plan_history.json) 격리 저장소 (gitignored)
 │   └── code/, notebooks/   #   └── 노트북 실습용 샘플 데이터
 ├── configs/                # ⚙️ HITL, 로깅 등 런타임 설정
 ├── install/                # 🔧 환경 설치 스크립트 모음
@@ -183,7 +185,7 @@ AAWS/
 > [!NOTE]
 > **산출물 저장 위치 정책 (교육용 단순화)**
 > - 대화 이력은 `app/database/checkpoints.db`(LangGraph `AsyncSqliteSaver`, WAL 모드) 하나에만 저장되며, UI의 세션 목록·메시지 조회도 이 체크포인트를 그대로 읽습니다.
-> - **세션 격리는 계획 보드에만 적용됩니다.** Supervisor의 계획 보드(`plan_state.json`/`task_state.json`)는 `artifacts/users/{user_id}/sessions/{session_id}/plan/`에 세션별로 분리되어, 여러 대화창에서 계획이 섞이지 않습니다.
+> - **세션 격리는 계획 보드에만 적용됩니다.** Supervisor의 계획 보드(`plan_state.json`/`task_state.json`/`plan_history.json`)는 `artifacts/users/{user_id}/sessions/{session_id}/plan/`에 세션별로 분리되어, 여러 대화창에서 계획이 섞이지 않습니다.
 > - 반면 에이전트가 만드는 **수집 데이터·차트·보고서는 사용자가 지정한 경로 그대로 공유 `artifacts/` 폴더**(`artifacts/data/`, `artifacts/reports/` 등)에 저장됩니다. 실습 경로를 단순하게 유지하기 위한 의도된 설계이므로, 같은 파일명으로 여러 세션을 동시에 실행하면 결과 파일이 덮어써질 수 있습니다.
 > - 예외적으로 Supervisor가 `invoke_sub_agent`로 위임할 때 `target_file_list`를 비워 두면, 지시문에 안내된 서브에이전트 전용 폴더(`artifacts/users/{user_id}/sessions/{supervisor_session}/subagents/...`)에 산출물이 생성될 수 있습니다.
 > - 산출물까지 세션 단위로 완전히 격리하는 구조(프롬프트에 `workspace_dir` 동적 주입)는 Harness Agent 과정의 `PromptAssembler`에서 다룹니다.
@@ -192,7 +194,7 @@ AAWS/
 
 ## ▶️ 실시간 서빙 및 채팅 UI 가동 가이드
 
-노트북 학습과 미션을 마친 후, 구축한 **멀티에이전트 시스템을** 웹 채팅 UI로 실행할 수 있습니다. **터미널 2개**를 열어 백엔드와 프론트엔드를 각각 실행하세요.
+노트북 학습과 미션을 마친 후, 구축한 **멀티에이전트 시스템**을 웹 채팅 UI로 실행할 수 있습니다. **터미널 2개**를 열어 백엔드와 프론트엔드를 각각 실행하세요.
 
 ### 1. 백엔드 서버 (FastAPI) 가동 — 터미널 ①
 ```bash
