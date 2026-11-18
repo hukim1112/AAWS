@@ -14,7 +14,7 @@
   - `agent.py`: `create_agent_executor()` 팩토리 함수 작성
   - `__init__.py`: `AGENT_METADATA` 및 `create_agent_executor` 노출
 * **하위 전문 에이전트 / 도구**: `app/agents/scraper/` / `app/tools`
-* **계획 및 태스크 도구**: `app/tools/plan.py` (`enter_plan`, `task_create`, `task_list`, `task_update`, `exit_plan`)
+* **계획 및 태스크 도구**: `app/tools/plan.py` (`enter_plan`, `exit_plan`, `task_create`, `task_list`, `task_update`)
 * **공용 파일 도구**: `app/tools/common.py`
 
 ---
@@ -52,7 +52,7 @@
 > 💡 **[안내] 패키지 구조 및 역할 분리**:
 > 에이전트 아키텍처 원칙에 따라 Supervisor는 `app/agents/supervisor/` 폴더 내에 3개의 모듈로 깔끔하게 분리되어 있습니다:
 > - **`tools.py`**: 하위 에이전트를 호출하는 `invoke_sub_agent` 도구 구현 및 `tools_supervisor` 목록 정의
-> - **`prompt.py`**: 오케스트레이션 4대 원칙을 담은 `SUPERVISOR_SYSTEM_PROMPT` 작성
+> - **`prompt.py`**: 오케스트레이션 핵심 원칙을 담은 `SUPERVISOR_SYSTEM_PROMPT` 작성
 > - **`agent.py`**: LLM, 체크포인터, 도구, 프롬프트를 바인딩하는 `create_agent_executor()` 팩토리 함수 작성
 
 ---
@@ -73,7 +73,7 @@ from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
 
 from app.utils import normalize_content
-from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update
+from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update, check_plan_mode_tool_allowed
 from app.tools.common import file_read, file_writer, glob_search, grep_search, file_edit, web_search
 from app.agents.scraper import create_agent_executor as create_scraper_executor
 
@@ -87,7 +87,7 @@ class InvokeSubAgentInput(BaseModel):
     )
     target_file_list: List[str] = Field(
         default_factory=list,
-        description="List of relative file paths that the sub-agent needs to inspect or generate."
+        description="List of relative file paths that the sub-agent needs to inspect or generate (including the Shared Plan File path returned by exit_plan, input data paths, and output artifact paths)."
     )
     subagent_role: str = Field(
         default="scraper",
@@ -98,16 +98,21 @@ class InvokeSubAgentInput(BaseModel):
 async def invoke_sub_agent(task_instruction: str, target_file_list: List[str] = [], subagent_role: str = "scraper") -> str:
     """Forks an isolated, sandboxed sub-agent with a dedicated worker persona to execute focused web scraping, discovery, or data analysis tasks.
 
-    The sub-agent operates in an isolated ReAct loop, writes detailed artifacts directly to disk, and returns only a concise 5-line summary report.
+    The sub-agent operates in an isolated ReAct loop, writes detailed artifacts directly to disk, and returns only a concise 5-line `[TASK REPORT]` summary (or `[BLOCKER: <reason>]` on failure).
 
-    Args:
-        task_instruction: Specific task directive for the sub-agent.
-        target_file_list: List of file paths for the sub-agent to inspect or write.
-        subagent_role: Role persona assigned to the sub-agent.
+    PROTOCOL — BEFORE CALLING:
+      1. For multi-step tasks, call enter_plan(intent='new' or 'revise', goal=...) -> perform any needed read-only discovery -> call exit_plan(plan_name, steps) to publish your finalized plan on the Shared Blackboard.
+      2. Register a task with task_create() to track this delegation.
+      3. Include the Shared Plan File path (returned by exit_plan) along with target input/output artifact paths in target_file_list so the sub-agent shares the full context.
 
-    Returns:
-        A formatted `[TASK REPORT]` string containing Status (SUCCESS/BLOCKER), Target files, Artifacts Created, Summary, and Issues.
+    PROTOCOL — AFTER RECEIVING RESPONSE:
+      - [TASK REPORT] + Status: SUCCESS -> Call task_update(task_id, 'COMPLETED').
+      - [BLOCKER: <reason>] -> Call task_update(task_id, 'BLOCKED'). When new evidence supports an alternative path, backtrack via enter_plan(intent='revise', goal=...) -> exit_plan(plan_name, steps) -> task_create(), then re-delegate.
     """
+    block_msg = check_plan_mode_tool_allowed("invoke_sub_agent")
+    if block_msg:
+        return block_msg
+
     scraper = await create_scraper_executor()
     
     file_list_str = ", ".join(target_file_list) if target_file_list else "None"
@@ -175,18 +180,16 @@ SUPERVISOR_SYSTEM_PROMPT = f"""당신은 사용자의 요청을 편안하게 도
 [작업 원칙]
 ═══════════════════════════════════════════════════════════════
 
-1. **작업 규모에 맞게 처리하기**:
-   - 간단한 질의나 즉시 처리가 가능한 작업은 곧바로 수행하세요.
-   - 여러 단계가 필요한 복잡한 작업은 계획을 먼저 세우고 수행하세요.
-   - 전문가에게 작업을 위임할 때는 수립한 계획도 함께 공유하여 전체 맥락을 파악하고 일할 수 있게 하세요.
+- **작업 규모에 맞게 처리하기**: 일상 대화, 질문 답변, 단일 검색, 간단한 파일 조회나 코드 작성처럼
+  바로 처리할 수 있는 간단한 일은 계획 도구를 쓰지 않고 곧바로 처리하세요.
+  여러 단계가 연결되거나 전문 에이전트에게 위임해야 하는 복잡한 작업은 먼저 계획 모드에서 필요한 맥락을 살펴 실행 계획을 확정한 뒤 수행하세요.
+  전문가에게 작업을 위임할 때는 확정한 계획도 함께 공유하여 전체 맥락을 파악하고 일할 수 있게 하세요.
 
-2. **전문가 활용하기**:
-   - 웹 데이터 수집, 스크래핑 등 전문 작업은 `invoke_sub_agent` 도구를 통해 전문 에이전트에게 위임하세요.
-   - 상세 위임 절차 및 파라미터는 `invoke_sub_agent` 도구의 설명을 참고하세요.
+- **전문가 활용하기**: 웹 데이터 수집, 스크래핑 등 전문 작업은 `invoke_sub_agent` 도구를 통해 전문 에이전트에게 위임하세요.
+  상세 계획·위임 절차 및 파라미터는 계획 도구와 `invoke_sub_agent` 도구의 설명을 참고하세요.
 
-3. **실패해도 멈추지 않기**:
-   - 위임한 작업이 막히거나 장애([BLOCKER])가 발생하더라도 포기하지 마세요.
-   - 원인을 파악하고 대안 경로를 찾아 끝까지 완수하세요.
+- **실패해도 멈추지 않기**: 위임한 작업이 막히거나 장애([BLOCKER])가 발생하더라도 포기하지 마세요.
+  원인과 보존된 상태를 확인하고, 대안 경로가 있다면 기존 계획을 수정한 뒤 재위임하여 끝까지 완수하세요.
 
 ═══════════════════════════════════════════════════════════════
 [답변 방식]
@@ -285,19 +288,19 @@ http://quotes.toscrape.com 사이트에서 1~2페이지의 명언(text, author, 
 'artifacts/data/quotes_multiagent.json' 파일로 저장하고, 수집된 결과 요약을 보고해줘.
 ```
 
-> 💡 **파일 저장 위치 참고**: 계획 보드(`plan_state.json`, `task_state.json`)는 세션별로 `artifacts/users/{user_id}/sessions/{session_id}/`에 분리 저장되지만,
+> 💡 **파일 저장 위치 참고**: 계획 보드(`plan_state.json`, `task_state.json`)는 세션별로 `artifacts/users/{user_id}/sessions/{session_id}/plan/`에 분리 저장되지만,
 > 수집 결과(`artifacts/data/...`)는 요청한 경로 그대로 공유 `artifacts/` 폴더에 저장됩니다 (교육용 단순화 설계).
 > 저장 경로를 지정하지 않으면 Scraper는 위임 지시문에 안내된 서브에이전트 전용 폴더(`artifacts/users/.../subagents/...`)에 결과를 만들 수 있습니다.
 
 #### 🧪 실행 궤적(Trajectory) 관찰 포인트:
-1. **Supervisor의 자율적 계획 수립**: 작업 규모를 판단하여 Task Board에 계획 및 세부 태스크 등록
-2. **하위 Scraper 위임**: 수립한 계획 및 타겟 파일(`target_file_list=['artifacts/data/quotes_multiagent.json']`)과 함께 `invoke_sub_agent` 호출 (맥락 인계)
+1. **Supervisor의 자율적 계획 수립**: 작업 규모를 판단하여 `enter_plan(intent='new')`로 계획 모드에 진입하고, 필요한 맥락 확인 후 `exit_plan(plan_name, steps)`으로 실행 계획을 확정한 뒤 `task_create`로 세부 태스크 등록
+2. **하위 Scraper 위임**: 확정된 공유 계획 파일 경로(`plan_state.json`)와 타겟 파일(`artifacts/data/quotes_multiagent.json`)을 `target_file_list`에 함께 담아 `invoke_sub_agent` 호출 (맥락 인계)
 3. **Scraper의 독립 실행**:
    - 인계받은 계획을 참조하여 DOM 탐색 (`extract_dom_skeleton` / `verify_selectors`)
    - `file_writer`로 수집 스크립트 작성 및 `bash_command`로 실행하여 JSON 파일 생성
    - 직접 계획표를 수정하지 않고 규격화된 `[TASK REPORT]`로 결과 보고
 4. **Supervisor의 태스크 완료 및 최종 보고**:
-   - `task_update` (`COMPLETED`) ➔ `exit_plan` ➔ 사용자에게 깔끔한 수집 통계 및 샘플 보고 완료!
+   - `task_update` (`COMPLETED` — 모든 태스크 완료 시 계획 상태도 `COMPLETED`로 자동 전환) ➔ 사용자에게 깔끔한 수집 통계 및 샘플 보고 완료!
 
 ---
 

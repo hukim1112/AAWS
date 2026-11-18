@@ -31,6 +31,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import ToolRuntime
 
 from app.client import AsyncAgentClient
+from app.tools.plan import check_plan_mode_tool_allowed
 
 # FastAPI 백엔드 기본 URL 및 공유 비동기 클라이언트 (커넥션 풀 재사용)
 FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
@@ -174,8 +175,8 @@ class InvokeSubAgentInput(BaseModel):
     target_file_list: List[str] = Field(
         default_factory=list,
         description=(
-            "List of relative file paths the sub-agent should inspect or create. "
-            "These define where the sub-agent reads input context or stores its output artifacts."
+            "List of relative file paths the sub-agent should inspect or create "
+            "(including the Shared Plan File path returned by exit_plan, input data paths, and output artifact paths)."
         )
     )
     subagent_role: str = Field(
@@ -233,27 +234,35 @@ async def invoke_sub_agent(
         instance to continue its prior work or recover from a [BLOCKER] with its memory preserved.
 
     PROTOCOL — BEFORE CALLING:
-      1. Register a task with task_create() to track this delegation.
-      2. Set target_file_list to exact output artifact path(s)
-         (e.g. ['artifacts/data/quotes.json']).
+      1. For multi-step tasks, enter_plan(intent='new' or 'revise') -> perform any needed read-only discovery -> exit_plan(plan_name, steps)
+         to publish your plan on the Shared Blackboard before delegating.
+      2. Register a task with task_create() to track this delegation.
+      3. Include the Shared Plan File path (returned by exit_plan) along with target input/output artifact paths
+         in target_file_list (e.g. ['artifacts/users/.../plan/plan_state.json', 'artifacts/data/quotes.json'])
+         so the sub-agent shares the full context.
 
-    PROTOCOL — BACKGROUND EXECUTION (run_in_background=True) [RECOMMENDED DEFAULT FOR SUB-AGENTS]:
-      - MUST be used for all data analysis, chart/dashboard creation, Excel writing, and scraping.
-      - Even if data already exists, generating charts & dashboards takes multiple tool steps (>1 min).
-      - Returns immediately with [JOB SUBMITTED] including Job ID and Sub-Thread ID.
-      - Inform the user that the background job has started (with Job ID).
-      - When finished, the server will automatically notify and wake you up with full results to continue.
+    PROTOCOL — EXECUTION MODE (run_in_background):
+      - Background mode (run_in_background=True) [RECOMMENDED DEFAULT FOR SUB-AGENTS]:
+          * MUST be used for all data analysis, chart/dashboard creation, Excel writing, and scraping.
+          * Even if data already exists, generating charts & dashboards takes multiple tool steps (>1 min).
+          * Returns immediately with [JOB SUBMITTED] including Job ID and Sub-Thread ID.
+          * Inform the user that the background job has started (with Job ID).
+          * When finished, the server will automatically notify and wake you up with full results to continue.
+      - Synchronous mode (run_in_background=False):
+          * Use ONLY for lightweight text inquiries (e.g. asking agent capabilities).
 
-    PROTOCOL — AFTER RECEIVING RESPONSE (SYNCHRONOUS / run_in_background=False):
-      - Use ONLY for lightweight text inquiries (e.g. asking agent capabilities).
+    PROTOCOL — AFTER RECEIVING SUB-AGENT RESULT (BACKGROUND WAKEUP OR SYNCHRONOUS):
       - [TASK REPORT] + Status: SUCCESS
           → Call task_update(task_id, 'COMPLETED').
       - [BLOCKER: <reason>]  (sub-agent encountered an unrecoverable issue)
           → Call task_update(task_id, 'BLOCKED').
           → Inspect the cause, previous recovery attempts, preserved artifacts,
-            and remaining budget. Delegate a fallback only when new evidence
-            and budget support it (pass the same sub_thread_id if continuing the same attempt history);
-            do not reset attempts on follow-up calls.
+            and remaining budget.
+          → When new evidence and budget support an alternative strategy or fallback path,
+            backtrack first: call enter_plan(intent='revise', goal=...) -> perform any needed
+            read-only discovery -> call exit_plan(plan_name, steps) -> register the fallback
+            task with task_create(), then re-delegate (pass the same sub_thread_id if continuing
+            the same attempt history; do not reset retry counts on follow-up calls).
           → Report missing authorization/credentials, required human intervention,
             or exhausted recovery to the user with the required next step.
 
@@ -272,6 +281,22 @@ async def invoke_sub_agent(
     if runtime and hasattr(runtime, "context") and runtime.context:
         caller_agent = getattr(runtime.context, "agent_name", None) or _CALLER_AGENT_NAME
         caller_user_id = getattr(runtime.context, "user_id", None) or "default"
+
+    guard_sid = (
+        runtime.execution_info.thread_id
+        if (runtime and runtime.execution_info and runtime.execution_info.thread_id)
+        else None
+    )
+    guard_uid = (
+        getattr(runtime.context, "user_id", None)
+        if (runtime and hasattr(runtime, "context") and runtime.context)
+        else None
+    )
+    block_msg = check_plan_mode_tool_allowed(
+        "invoke_sub_agent", session_id=guard_sid, user_id=guard_uid
+    )
+    if block_msg:
+        return block_msg
 
     client = get_subagent_client()
 

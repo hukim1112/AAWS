@@ -10,7 +10,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
-from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update
+from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update, check_plan_mode_tool_allowed
 from app.tools.common import file_read, file_writer, glob_search, grep_search, file_edit, web_search
 from app.agents.scraper import create_agent_executor as create_scraper_executor
 
@@ -22,7 +22,7 @@ from app.agents.scraper import create_agent_executor as create_scraper_executor
 #
 # class InvokeSubAgentInput(BaseModel):
 #     task_instruction: str = Field(description="하위 에이전트에게 내릴 명확하고 구체적인 작업 지시문")
-#     target_file_list: List[str] = Field(default_factory=list, description="참조하거나 생성할 대상 파일 경로 목록")
+#     target_file_list: List[str] = Field(default_factory=list, description="참조하거나 생성할 대상 파일 경로 목록 (공유 계획 파일 포함)")
 #     subagent_role: str = Field(default="scraper", description="작업을 수행할 전문 에이전트 역할 (기본값: 'scraper')")
 #
 # @tool(args_schema=InvokeSubAgentInput)

@@ -14,7 +14,7 @@ today_date = date.today().strftime("%Y-%m-%d")
 # =============================================================================
 # TODO: missions/03_missions.md [2단계] 또는 missions/04_missions.md를 참고하여
 #       원칙 중심의 SUPERVISOR_SYSTEM_PROMPT를 완성하세요:
-#       1. 작업 규모에 맞게 처리하기 (간단한 일 직접 처리, 여러 단계 작업은 계획 수립)
+#       1. 작업 규모에 맞게 처리하기 (간단한 일 직접 처리, 여러 단계·위임 작업은 계획 모드 활용 및 계획 공유)
 #       2. 전문가 활용하기 (Scraper 등 전문 에이전트에게 invoke_sub_agent로 위임)
 #       3. 실패해도 멈추지 않기 (Backtracking 자가 치유)
 #       4. 결과 중심 답변 및 UI 렌더링 태그 규칙 (<Render_HTML>, <Render_Image>, <Render_File>)
