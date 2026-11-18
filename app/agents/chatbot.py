@@ -48,7 +48,7 @@ async def create_agent_executor(checkpointer=None):
         checkpointer = AsyncSqliteSaver(conn)
         await checkpointer.setup()
     
-    # 3. 범용 8대 도구 + 커스텀 기억 도구 2종이 탑재된 스마트 챗봇 에이전트 구축
+    # 3. 범용 9대 도구 + 커스텀 기억 도구 2종이 탑재된 스마트 챗봇 에이전트 구축
     active_tools = tools_chatbot + [read_user_memory, update_user_memory]
     chatbot_agent = create_agent(
         model=llm,

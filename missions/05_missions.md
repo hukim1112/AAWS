@@ -148,10 +148,10 @@ chainlit run app/chainlit_ui.py --port 8080
   > *"http://quotes.toscrape.com 에서 데이터를 수집하고, 결측치와 태그 데이터의 정합성을 검증하여 정제된 `artifacts/data/quotes_clean.json` 파일과 품질 검증 리포트를 발행해줘."*
 
 #### 🧪 실행 궤적(Trajectory) 관찰:
-1. **Supervisor 계획 수립**: `enter_plan` ➔ [Task 1: 수집] 및 [Task 2: 서브 에이전트 가공] 태스크 생성
-2. **Task 1 위임**: `invoke_sub_agent(subagent_role="scraper")`로 데이터 수집 완수
-3. **Task 2 위임**: `invoke_sub_agent(subagent_role="[여러분의_서브에이전트]")`로 데이터 2차 가공 및 산출물 생성
-4. **Supervisor 최종 종합**: `exit_plan` 호출 및 사용자에게 최종 결과 브리핑 완료!
+1. **Supervisor 계획 수립**: `enter_plan(intent='new')` ➔ `list_sub_agents` 등으로 가용 에이전트 확인 ➔ `exit_plan(plan_name, steps)`으로 실행 계획 확정 ➔ `task_create`로 [Task 1: 수집] 및 [Task 2: 서브 에이전트 가공] 태스크 등록
+2. **Task 1 위임**: 공유 계획 파일(`plan_state.json`)과 함께 `invoke_sub_agent(subagent_role="scraper", run_in_background=True)`로 데이터 수집 완수 및 `task_update('COMPLETED')`
+3. **Task 2 위임**: 수집 산출물 및 공유 계획 파일과 함께 `invoke_sub_agent(subagent_role="[여러분의_서브에이전트]", run_in_background=True)`로 데이터 2차 가공 및 산출물 생성
+4. **Supervisor 최종 종합**: 마지막 태스크 `task_update('COMPLETED')` 갱신(계획 상태 `COMPLETED` 자동 전환) 및 사용자에게 최종 결과 브리핑 완료!
 
 ---
 

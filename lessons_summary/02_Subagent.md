@@ -87,18 +87,18 @@ Supervisor ← [5줄 TASK REPORT 포인터] ← Scraper
 
 | 구성 요소 | 역할 | 해소하는 비대칭 |
 |:---|:---|:---|
-| `Task Board` (`task_state.json`) | 계획 + 진행 상태를 디스크에 기록 | Supervisor가 전체 진행도를 추적 |
+| Blackboard (`plan_state.json`, `task_state.json`) | 확정된 실행 계획 + 태스크 진행 상태를 디스크에 기록 | Supervisor와 Sub-agent가 전체 계획 맥락과 진행도를 공유 |
 | `artifacts/` 디렉토리 | 산출물을 파일로 영구 보존 | 이후 Sub-agent가 이전 결과를 파일로 조회 가능 |
 | `[TASK REPORT]` 프로토콜 | Worker → Supervisor 5줄 요약 반환 | Supervisor가 핵심 결과만 히스토리에 기록 |
 
 ```
 👑 Supervisor
-  enter_plan()          # Blackboard에 계획 수립
-  task_create()         # 태스크 등록
-  invoke_sub_agent()    # 지시문 주입 → Scraper 실행
-  [TASK REPORT] 수신    # 5줄 결과 포인터 수신
-  task_update('DONE')   # Blackboard 상태 업데이트
-  exit_plan()           # 완료 선언
+  enter_plan(intent='new')    # 읽기 전용 계획 모드 진입 (맥락 탐색)
+  exit_plan(plan_name, steps) # Blackboard(plan_state.json)에 실행 계획 확정·게시
+  task_create()               # 실행 태스크 등록 (task_state.json)
+  invoke_sub_agent()          # 공유 계획 파일 + 지시문 주입 → Scraper 실행
+  [TASK REPORT] 수신          # 5줄 결과 포인터 수신
+  task_update(1, 'COMPLETED') # 태스크 완료 기록 (모든 태스크 완료 시 계획도 COMPLETED 자동 전환)
 ```
 
 > **핵심 교훈**: Dynamic Context Pruning은 컨텍스트 오염을 막지만, 그 대가로 정보 비대칭 문제를 만든다. 이를 해소하는 것이 Blackboard 패턴이다. "맥락 단절 → 파일 기반 공유"가 멀티에이전트 설계의 핵심 트레이드오프다.
@@ -380,13 +380,15 @@ async def invoke_sub_agent(...) -> str:
       - Data analysis / chart generation    → subagent_role="analyst"
 
     PROTOCOL — BEFORE CALLING:
-      1. Register a task with task_create() to track this delegation.
-      2. Set target_file_list to exact output artifact path(s).
+      1. For multi-step tasks, enter_plan(intent='new' or 'revise') -> perform read-only discovery
+         -> exit_plan(plan_name, steps) to publish your plan on the Shared Blackboard.
+      2. Register a task with task_create() to track this delegation.
+      3. Include the Shared Plan File path (returned by exit_plan) along with output artifact paths in target_file_list.
 
-    PROTOCOL — AFTER RECEIVING RESPONSE:
+    PROTOCOL — AFTER RECEIVING SUB-AGENT RESULT:
       - [TASK REPORT] + Status: SUCCESS → task_update(task_id, 'COMPLETED')
       - [BLOCKER: reason]               → task_update(task_id, 'BLOCKED')
-                                          → task_create() fallback & retry
+                                          → enter_plan(intent='revise') -> exit_plan(...) -> task_create() & retry
     """
 ```
 
@@ -410,6 +412,7 @@ invoke_sub_agent 반환값 분기:
 └─ [BLOCKER: <reason>]
      └─ task_update(task_id, 'BLOCKED')
      └─ 원인 분석 (reason 파싱)
+     └─ enter_plan(intent='revise') → exit_plan(plan_name, steps)  # 계획 수정 게시
      └─ task_create() → 대안 태스크 등록
      └─ invoke_sub_agent() → 수정된 파라미터로 재위임
 ```
@@ -421,8 +424,10 @@ invoke_sub_agent 반환값 분기:
    → [BLOCKER: 사이트 접근 차단 (403 Forbidden)]
 
 Supervisor:
-   → task_update(task_id="T001", status="BLOCKED")
-   → task_create(title="대안 수집", desc="books.toscrape.com으로 전환")
+   → task_update(task_id=1, status="BLOCKED")
+   → enter_plan(intent="revise", goal="차단 우회 대안 데이터 소스 전환")
+   → exit_plan(plan_name="대안 수집 계획", steps=["books.toscrape.com 수집 및 보고"])
+   → task_create(title="대안 수집", description="books.toscrape.com으로 전환")
    → invoke_sub_agent("books.toscrape.com 수집", role="scraper")
    → [TASK REPORT] Status: SUCCESS ✅
 ```
@@ -461,7 +466,7 @@ except Exception as e:
 | 2 | ReAct 질문 | 4.3s | 도구 없이 즉시 직접 응답 | ✅ |
 | 3 | 웹 검색 | 10.3s | `web_search` 직접 사용 (코드 예시 포함) | ✅ |
 | 4 | 피보나치 코딩 | 2.6s | 도구 없이 즉시 직접 응답 (한국어 에러 메시지) | ✅ |
-| 5 | 스크래핑 위임 | 59.9s | `enter_plan → task_create → invoke_sub_agent → task_update → exit_plan` | ✅ |
+| 5 | 스크래핑 위임 | 59.9s | `enter_plan → exit_plan → task_create → invoke_sub_agent → task_update` | ✅ |
 | 6 | Sub-agent 후속 질문 | 7.7s | Scraper가 이전 세션 맥락 및 셀렉터 회상 | ✅ |
 
 ---
@@ -565,7 +570,7 @@ def fibonacci(n: int) -> int:
 **[USER → Supervisor]**
 > http://quotes.toscrape.com 사이트에서 1페이지의 명언(text, author, tags)을 수집해서 'artifacts/data/quotes_v2_test.json' 파일로 저장하고, 수집된 결과 요약을 보고해줘. Task Board에 계획을 등록하고 Scraper에게 위임해서 진행해줘.
 
-**[Supervisor]** *(내부 실행: `enter_plan` → `task_create` → `invoke_sub_agent` → Scraper 실행 → `task_update` → `exit_plan`)*
+**[Supervisor]** *(내부 실행: `enter_plan` → `exit_plan` → `task_create` → `invoke_sub_agent` → Scraper 실행 → `task_update`)*
 
 웹 스크래핑 작업을 성공적으로 완료하고 데이터를 저장했습니다.
 
