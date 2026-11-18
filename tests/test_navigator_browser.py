@@ -570,3 +570,23 @@ class NavigatorSpecAndUnitTests(unittest.TestCase):
         hint_xpath = navigator._selector_error_hint("//div[@class='price']/text()", dummy_exc)
         self.assertIn("CSS", hint_xpath)
         self.assertIn("::attr(", hint_xpath)
+
+    def test_json_string_param_pokayoke_coerces_native_dict_and_list(self):
+        parsed_selectors = navigator.VerifySelectorsInput(
+            selectors_json={"title": "h1", "price": "span.price"}
+        )
+        self.assertEqual(json.loads(parsed_selectors.selectors_json), {"title": "h1", "price": "span.price"})
+
+        parsed_actions = navigator.InteractPageInput(
+            actions_json=[{"action": "click", "selector": "button#submit"}]
+        )
+        self.assertEqual(
+            json.loads(parsed_actions.actions_json),
+            [{"action": "click", "selector": "button#submit"}],
+        )
+
+        # Emitted JSON Schema stays type='string' for Gemini/OpenAI compatibility
+        ver_schema = navigator.VerifySelectorsInput.model_json_schema()
+        act_schema = navigator.InteractPageInput.model_json_schema()
+        self.assertEqual(ver_schema["properties"]["selectors_json"]["type"], "string")
+        self.assertEqual(act_schema["properties"]["actions_json"]["type"], "string")

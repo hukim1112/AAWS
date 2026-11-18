@@ -36,12 +36,22 @@ from contextvars import ContextVar
 from functools import wraps
 from urllib.parse import urlsplit
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Annotated, Any, Optional, Tuple
 
 from bs4 import BeautifulSoup, Tag
 from langchain_core.runnables.config import var_child_runnable_config
 from langchain_core.tools import ToolException, tool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
+
+
+def _coerce_json_string(value: Any) -> Any:
+    """네이티브 dict/list 인자가 전달되면 JSON 문자열로 자동 변환합니다 (Pokayoke)."""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
+JsonStringParam = Annotated[str, BeforeValidator(_coerce_json_string)]
 
 
 # 현재 실행 중인 스크래퍼/에이전트 세션(thread_id) 및 멀티탭(tab_id) 식별자 ContextVar
@@ -1200,7 +1210,7 @@ async def get_page_section(url: str = "", root_selector: str = "body", max_chars
 
 class VerifySelectorsInput(BaseModel):
     url: str = Field(default="", description="대상 URL (빈 문자열이면 현재 탭 상태 유지)")
-    selectors_json: str = Field(description="JSON 문자열 셀렉터 딕셔너리. 텍스트: '{\"title\": \"a.title\"}', 속성: '{\"link\": \"a.title::attr(href)\"}'")
+    selectors_json: JsonStringParam = Field(description="JSON 문자열 셀렉터 딕셔너리. 텍스트: '{\"title\": \"a.title\"}', 속성: '{\"link\": \"a.title::attr(href)\"}'")
     max_samples: int = Field(default=5, description="각 셀렉터당 반환할 최대 샘플 수 (1~50, 기본: 5)")
     wait_ms: int = Field(default=2000, description="페이지 로드 후 대기 시간(ms) (기본: 2000)")
     reload: bool = Field(default=False, description="현재 문서를 명시적으로 새로고침할 때만 True")
@@ -1345,7 +1355,7 @@ async def verify_selectors(url: str = "", selectors_json: str = "{}", max_sample
 
 class InteractPageInput(BaseModel):
     url: str = Field(default="", description="대상 URL (빈 문자열이면 현재 페이지에서 계속)")
-    actions_json: str = Field(description=(
+    actions_json: JsonStringParam = Field(description=(
         '수행할 액션 리스트 JSON. 지원 액션: '
         '[{"action": "click", "selector": "button.load_more"}], '
         '[{"action": "fill", "selector": "input#search", "value": "검색어"}], '
