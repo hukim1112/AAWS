@@ -24,11 +24,28 @@ Supervisor 에이전트의 멀티에이전트 오케스트레이션 핵심 도�
 """
 
 import os
+import inspect
 import uuid
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from langgraph.prebuilt import ToolRuntime
+
+
+def _format_validation_error(error: Exception) -> str:
+    """Formats Pydantic tool validation errors into an actionable error message."""
+    details: list[str] = []
+    errors_fn = getattr(error, "errors", None)
+    if callable(errors_fn):
+        try:
+            for item in errors_fn():
+                loc = ".".join(str(p) for p in item.get("loc", ())) or "(root)"
+                details.append(f"{loc}: {item.get('msg', 'invalid value')}")
+        except Exception:
+            details = []
+    if not details:
+        details = [str(error)]
+    return "[ERROR: Invalid tool arguments — " + "; ".join(details) + "]"
 
 from app.client import AsyncAgentClient
 from app.tools.plan import check_plan_mode_tool_allowed
@@ -133,17 +150,10 @@ async def _get_sub_agents(client: AsyncAgentClient) -> List[dict]:
 
 @tool
 async def list_sub_agents() -> str:
-    """Returns the list of specialist sub-agents currently available on the server.
+    """Returns the formatted list of specialist sub-agents currently available on the server.
 
     Use this tool to discover which sub-agents can be delegated to before calling
     invoke_sub_agent. The returned list includes each agent's name and description.
-
-    Returns:
-        A formatted string listing available sub-agent names and descriptions.
-        Example:
-            Available sub-agents:
-            - scraper: 웹 데이터 수집 전문 에이전트
-            - analyst: 데이터 분석 및 리포트 생성 전문 에이전트
     """
     client = get_subagent_client()
     try:
@@ -157,8 +167,12 @@ async def list_sub_agents() -> str:
             desc = agent.get("description", "No description provided.")
             lines.append(f"  - {name}: {desc}")
         return "\n".join(lines)
+    except ToolException:
+        raise
     except Exception as e:
-        return f"[ERROR: Failed to query agent registry — {str(e)}]"
+        raise ToolException(
+            f"[ERROR: Failed to query agent registry at {FASTAPI_BASE_URL} — {str(e)}. Ensure the FastAPI server is running.]"
+        ) from e
 
 
 # =============================================================================
@@ -211,13 +225,13 @@ class InvokeSubAgentInput(BaseModel):
 @tool(args_schema=InvokeSubAgentInput)
 async def invoke_sub_agent(
     task_instruction: str,
-    target_file_list: List[str] = [],
+    target_file_list: Optional[List[str]] = None,
     subagent_role: str = "scraper",
     run_in_background: bool = False,
     sub_thread_id: Optional[str] = None,
     runtime: ToolRuntime = None,
 ) -> str:
-    """Delegates a focused task to a specialized sub-agent running on the server.
+    """Delegates a focused task to a specialized sub-agent and returns [TASK REPORT], [JOB SUBMITTED], or [BLOCKER].
 
     WHEN TO USE:
       - Web scraping / data collection tasks          → subagent_role="scraper"
@@ -265,12 +279,12 @@ async def invoke_sub_agent(
             the same attempt history; do not reset retry counts on follow-up calls).
           → Report missing authorization/credentials, required human intervention,
             or exhausted recovery to the user with the required next step.
-
-    Returns:
-        [TASK REPORT] formatted string (with Sub-Thread ID) on synchronous success.
-        [JOB SUBMITTED] formatted string (with Job ID and Sub-Thread ID) on background launch.
-        [BLOCKER: reason] string on failure.
     """
+    if not (task_instruction or "").strip():
+        return "[BLOCKER: 'task_instruction' cannot be empty. Provide a clear, actionable instruction for the sub-agent.]"
+
+    resolved_files = list(target_file_list or [])
+
     # 1. ToolRuntime으로 호출 에이전트 정보 추출
     supervisor_tid = "supervisor_default"
     if runtime and runtime.execution_info and runtime.execution_info.thread_id:
@@ -351,7 +365,7 @@ async def invoke_sub_agent(
 
     message = _build_subagent_message(
         task_instruction,
-        target_file_list,
+        resolved_files,
         is_first_call,
         workspace_info=workspace_info,
     )
@@ -416,20 +430,23 @@ class GetJobStatusInput(BaseModel):
 
 @tool(args_schema=GetJobStatusInput)
 async def get_sub_agent_job_status(job_id: str) -> str:
-    """Checks the progress and completion result of a background sub-agent job.
+    """Checks the progress and completion result (RUNNING, SUCCESS, FAILED) of a background sub-agent job.
 
     WHEN TO USE:
       - When the user asks for the status of a background task.
       - To inspect intermediate status or final reports of background jobs.
-
-    Returns:
-        Formatted status string containing status (RUNNING, SUCCESS, FAILED) and result/error.
     """
+    if not (job_id or "").strip():
+        raise ToolException("[ERROR: 'job_id' cannot be empty. Pass the Job ID returned by invoke_sub_agent.]")
+
     client = get_subagent_client()
     try:
         job = await client.get_job(job_id)
         if not job or job.get("status") == "error":
-            return f"[ERROR: Job '{job_id}' not found or query failed — {job.get('message', '')}]"
+            err_msg = job.get("message", "") if isinstance(job, dict) else ""
+            raise ToolException(
+                f"[ERROR: Job '{job_id}' not found or query failed — {err_msg}. Verify the Job ID from invoke_sub_agent.]"
+            )
 
         status = job.get("status", "UNKNOWN")
         agent_name = job.get("agent_name", "unknown")
@@ -457,5 +474,20 @@ async def get_sub_agent_job_status(job_id: str) -> str:
             lines.append(f"\n[Error Detail]\n{job.get('error', 'Unknown error')}")
 
         return "\n".join(lines)
+    except ToolException:
+        raise
     except Exception as e:
-        return f"[ERROR: Exception while checking job status — {str(e)}]"
+        raise ToolException(f"[ERROR: Exception while checking job status — {str(e)}]") from e
+
+
+def _finalize_supervisor_tool(t):
+    """Supervisor 오케스트레이션 도구 공통 메타데이터(docstring 정제, 에러 핸들링)를 일관 적용합니다."""
+    if getattr(t, "description", None):
+        t.description = inspect.cleandoc(t.description)
+    t.handle_tool_error = True
+    t.handle_validation_error = _format_validation_error
+    return t
+
+
+for _sup_tool in (list_sub_agents, invoke_sub_agent, get_sub_agent_job_status):
+    _finalize_supervisor_tool(_sup_tool)

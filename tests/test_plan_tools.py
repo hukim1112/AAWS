@@ -530,6 +530,47 @@ class PlanToolsTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(any("[PLANNING MODE GUARDRAIL]" in m for m in model.seen_tool_messages))
             self.assertEqual(res["messages"][-1].content, "Delegation completed.")
 
+    def test_plan_tools_aci_spec_and_tool_call_error_status(self):
+        for tool_obj in (enter_plan, exit_plan, task_create, task_list, task_update):
+            self.assertTrue(tool_obj.handle_tool_error, f"{tool_obj.name} handle_tool_error")
+            desc = tool_obj.description or ""
+            self.assertNotIn("Args:", desc, f"{tool_obj.name} duplicated Args:")
+            self.assertNotIn("Returns:", desc, f"{tool_obj.name} duplicated Returns:")
+            self.assertFalse(
+                desc.startswith((" ", "\t", "\n")),
+                f"{tool_obj.name} description has leading whitespace",
+            )
+
+        with plan_session_scope("sess_aci_errors", user_id="u_aci"):
+            enter_plan.invoke({"intent": "new", "goal": "Verify tool error status"})
+
+            blocked_msg = task_create.invoke(
+                {
+                    "type": "tool_call",
+                    "id": "call_plan_blocked",
+                    "name": task_create.name,
+                    "args": {"task_description": "Blocked while planning"},
+                }
+            )
+            self.assertIsInstance(blocked_msg, ToolMessage)
+            self.assertEqual(blocked_msg.status, "error")
+            self.assertIn("[PLANNING MODE GUARDRAIL]", str(blocked_msg.content))
+
+            exit_plan.invoke({"plan_name": "ACI Plan", "steps": ["Step 1"]})
+            task_create.invoke({"task_description": "Real Task #1"})
+
+            missing_msg = task_update.invoke(
+                {
+                    "type": "tool_call",
+                    "id": "call_missing_task",
+                    "name": task_update.name,
+                    "args": {"task_id": 99, "status": "COMPLETED"},
+                }
+            )
+            self.assertIsInstance(missing_msg, ToolMessage)
+            self.assertEqual(missing_msg.status, "error")
+            self.assertIn("Valid task IDs on board: [1]", str(missing_msg.content))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,7 @@ Claude Code Plan Mode 기반의 5대 Planning & Task Board 도구 엔진 (Blackb
 """
 
 import json
+import inspect
 import logging
 import threading
 import time
@@ -21,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Literal, Optional
 
 from langchain_core.runnables.config import ensure_config, var_child_runnable_config
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field, field_validator
 
 from app.utils.workspace import resolve_session_workspace, sanitize_path_segment
@@ -355,7 +356,7 @@ def enter_plan(
     goal: str = "",
     plan_name: Optional[str] = None,
 ) -> str:
-    """Enters read-only Planning Mode to explore context before committing to an execution plan.
+    """Enters read-only Planning Mode and returns the Shared Plan File path with next-step guidance.
 
     While in Planning Mode (active=True, phase='PLANNING'), perform read-only discovery only
     (e.g. list_sub_agents, glob_search, grep_search, file_read, web_search, task_list) and do not
@@ -365,14 +366,6 @@ def enter_plan(
     Choose intent explicitly:
       - intent='new'    : the user made a new request (even if the previous plan was left unfinished/BLOCKED).
       - intent='revise' : redesign the current plan mid-execution (backtracking after a [BLOCKER]).
-
-    Args:
-        intent: 'new' to start a fresh plan, or 'revise' to backtrack and redesign the current plan.
-        goal: Concise objective or problem statement for this planning phase.
-        plan_name: Optional draft title for the plan.
-
-    Returns:
-        Confirmation message with the Shared Plan File path and next-step guidance.
     """
     sid = _current_plan_session_id()
     with _plan_lock:
@@ -385,12 +378,12 @@ def enter_plan(
 
         if intent == "revise":
             if prev_phase == "IDLE" and not prev_tasks:
-                return (
+                raise ToolException(
                     "[ERROR] There is no current plan to revise. "
                     "Call enter_plan(intent='new', goal=...) to start a new plan."
                 )
             if not _is_plan_unfinished(prev_plan, prev_tasks):
-                return (
+                raise ToolException(
                     "[ERROR] The previous plan is already completed. "
                     "Call enter_plan(intent='new', goal=...) to start a new plan "
                     "(the completed plan will be archived automatically)."
@@ -460,28 +453,20 @@ def exit_plan(plan_name: str, steps: List[str]) -> str:
     """Exits Planning Mode, publishes the finalized plan to the Shared Blackboard, and unlocks Execution Mode.
 
     Can only be called while in Planning Mode: call enter_plan(intent=...) first.
-    Call this after completing read-only discovery in Planning Mode.
     Once called, task creation (task_create) and sub-agent delegation (invoke_sub_agent) are unlocked,
-    and the saved plan_state.json path can be shared with sub-agents via target_file_list.
-
-    Args:
-        plan_name: Concise title of the finalized plan.
-        steps: Non-empty sequential list of actionable steps.
-
-    Returns:
-        Confirmation with the Shared Plan File and Shared Task File paths.
+    returning the Shared Plan File and Shared Task File paths to share via target_file_list.
     """
     sid = _current_plan_session_id()
     clean_steps = [str(s).strip() for s in (steps or []) if str(s).strip()]
     with _plan_lock:
         prev_state = get_plan_state()
         if prev_state.get("phase") != "PLANNING":
-            return (
+            raise ToolException(
                 "[ERROR] Not in Planning Mode. Call enter_plan(intent='new' or 'revise', goal=...) first, "
                 "inspect the context, then call exit_plan(plan_name, steps)."
             )
         if not clean_steps:
-            return (
+            raise ToolException(
                 "[ERROR] Cannot exit Planning Mode with an empty 'steps' list. "
                 "Provide at least one actionable step in exit_plan(plan_name, steps)."
             )
@@ -710,20 +695,16 @@ class TaskCreateInput(BaseModel):
 
 @tool(args_schema=TaskCreateInput)
 def task_create(task_description: str) -> str:
-    """Creates a new tracked sub-task item on the task board.
+    """Creates a new tracked sub-task item on the task board and returns its generated ID and Shared Task File path.
 
     Requires Execution Mode (if currently in Planning Mode, call exit_plan first).
-
-    Args:
-        task_description: Clear description of the task item.
-
-    Returns:
-        Status message with generated task ID, initial PENDING status, and Shared Task File path.
     """
     with _plan_lock:
         block_msg = check_plan_mode_tool_allowed("task_create")
         if block_msg:
-            return block_msg
+            raise ToolException(block_msg)
+        if not (task_description or "").strip():
+            raise ToolException("[ERROR] 'task_description' cannot be empty.")
 
         t = task_board.create_task(task_description)
         plan_state = get_plan_state()
@@ -742,12 +723,7 @@ def task_create(task_description: str) -> str:
 
 @tool
 def task_list() -> str:
-    """Lists the current plan summary and all active/completed tasks on the shared task board.
-
-    Returns:
-        JSON string containing shared file paths, active plan summary (phase, plan_name, goal, steps),
-        and tracked tasks with their IDs, descriptions, and statuses.
-    """
+    """Lists the current plan summary, shared file paths, and all tracked tasks with their IDs and statuses as JSON."""
     plan_dir = _session_plan_dir(ensure_exists=False)
     plan_state = get_plan_state()
     tasks = task_board.list_tasks()
@@ -786,18 +762,15 @@ class TaskUpdateInput(BaseModel):
 
 @tool(args_schema=TaskUpdateInput)
 def task_update(task_id: int, status: TaskStatus) -> str:
-    """Updates the status of a specific task on the task board.
-
-    Args:
-        task_id: Numeric ID of the task to modify.
-        status: New status string ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED').
-
-    Returns:
-        Confirmation message of status update with Shared Task File path, or error if ID not found.
-    """
-    t = task_board.update_task(task_id, status)
-    if not t:
-        return f"Task #{task_id} not found."
+    """Updates a task status on the task board and returns the updated confirmation with Shared Task File path."""
+    with _plan_lock:
+        t = task_board.update_task(task_id, status)
+        if not t:
+            existing_ids = [item["id"] for item in task_board.list_tasks()]
+            valid_hint = existing_ids if existing_ids else "none (call task_create first)"
+            raise ToolException(
+                f"[ERROR] Task #{task_id} not found. Valid task IDs on board: {valid_hint}."
+            )
     rel_task_file = _rel_path_str(task_board._resolve_file())
     return (
         f"[TASK UPDATED] Task #{task_id} status changed to '{t['status']}' "
@@ -805,6 +778,14 @@ def task_update(task_id: int, status: TaskStatus) -> str:
     )
 
 
+def _finalize_plan_tool(t):
+    """Planning/Task 도구 공통 메타데이터(docstring 정제, 에러 핸들링)를 일관 적용합니다."""
+    if getattr(t, "description", None):
+        t.description = inspect.cleandoc(t.description)
+    t.handle_tool_error = True
+    return t
+
+
 # 📋 5대 Planning & Task 도구 묶음
-tools_planning = [enter_plan, exit_plan, task_create, task_list, task_update]
+tools_planning = [_finalize_plan_tool(t) for t in (enter_plan, exit_plan, task_create, task_list, task_update)]
 PLANNING_AND_TASK_TOOLS = tools_planning

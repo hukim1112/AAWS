@@ -4,11 +4,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from langchain_core.messages import ToolMessage
+
 from app.tools.supervisor_tools import (
     _FULL_PROTOCOL_HEADER,
     _PROTOCOL_REMINDER,
     get_sub_agent_job_status,
     invoke_sub_agent,
+    list_sub_agents,
 )
 
 
@@ -362,6 +365,36 @@ class SubAgentSessionIsolationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(any(f"- Sub-Thread ID: {sub_tid_b}" in c for c in sup_msgs))
             finally:
                 await conn.close()
+
+    @patch("app.tools.supervisor_tools.AsyncAgentClient", FakeAsyncAgentClient)
+    async def test_supervisor_tools_aci_spec_and_error_handling(self):
+        for tool_obj in (list_sub_agents, invoke_sub_agent, get_sub_agent_job_status):
+            self.assertTrue(tool_obj.handle_tool_error, f"{tool_obj.name} handle_tool_error")
+            self.assertTrue(
+                callable(tool_obj.handle_validation_error),
+                f"{tool_obj.name} handle_validation_error",
+            )
+            desc = tool_obj.description or ""
+            self.assertNotIn("Returns:", desc, f"{tool_obj.name} duplicated Returns:")
+            self.assertFalse(
+                desc.startswith((" ", "\t", "\n")),
+                f"{tool_obj.name} description has leading whitespace",
+            )
+
+        unknown_job_msg = await get_sub_agent_job_status.ainvoke(
+            {
+                "type": "tool_call",
+                "id": "call_unknown_job",
+                "name": get_sub_agent_job_status.name,
+                "args": {"job_id": "job_does_not_exist"},
+            }
+        )
+        self.assertIsInstance(unknown_job_msg, ToolMessage)
+        self.assertEqual(unknown_job_msg.status, "error")
+        self.assertIn("[ERROR:", str(unknown_job_msg.content))
+
+        empty_instr = await invoke_sub_agent.coroutine(task_instruction="   ")
+        self.assertTrue(empty_instr.startswith("[BLOCKER:"))
 
 
 if __name__ == "__main__":
