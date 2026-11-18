@@ -151,8 +151,7 @@ AAWS/
 │   ├── agents/             #   ├── 독립 패키지형 에이전트 모듈 (agent.py, prompt.py, tools.py)
 │   │   ├── chatbot.py      #   │   ├── 대화형 챗봇 (기억 도구 연동)
 │   │   ├── scraper/        #   │   ├── 웹 스크래퍼 패키지 (브라우저 탐색/코드작성/자가치유, 전용 skills/ 내장)
-│   │   ├── supervisor/     #   │   ├── 총괄 오케스트레이터 패키지 (계획 수립 & 서브에이전트 비동기 위임)
-│   │   └── analyst/        #   │   └── [Capstone] 데이터 분석·시각화 에이전트 (Mission 05 구현 예시, instructor 포함)
+│   │   └── supervisor/     #   │   └── 총괄 오케스트레이터 패키지 (계획 수립 & 서브에이전트 비동기 위임)
 │   ├── tools/              #   ├── 에이전트 공용 도구 모음 (common, navigator, plan, supervisor_tools, custom_tools)
 │   ├── prompts/            #   ├── 공통 프롬프트 템플릿 및 동적 스킬 빌더 (skill_builder.py)
 │   ├── database/           #   ├── 사용자 기억(USER.md), 대화 DB
