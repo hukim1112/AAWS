@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aiohttp import web
+from langchain_core.messages import ToolMessage
 
 from app.tools import navigator
 
@@ -374,3 +375,198 @@ class SharedBrowserTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(self.url + "popup-from-other", sec_other)
         # default 슬롯의 활성 탭은 여전히 self.page여야 함
         self.assertIs(await self.manager.get_page(wait_ms=0), self.page)
+
+    async def test_playwright_pseudo_selector_fallback_and_invalid_selector_error(self):
+        section = await navigator.get_page_section.ainvoke(
+            {"root_selector": "button:has-text('Add item')", "wait_ms": 0}
+        )
+        self.assertIn("Add item", section)
+
+        skeleton = await navigator.extract_dom_skeleton.ainvoke(
+            {"root_selector": "button:has-text('Add item')", "wait_ms": 0}
+        )
+        self.assertIn("Add item", skeleton)
+
+        direct_err = await navigator.get_page_section.ainvoke(
+            {"root_selector": "[", "wait_ms": 0}
+        )
+        self.assertIn("[Error]", direct_err)
+
+        tool_msg = await navigator.get_page_section.ainvoke(
+            {
+                "type": "tool_call",
+                "id": "call_invalid_sel",
+                "name": navigator.get_page_section.name,
+                "args": {"root_selector": "[", "wait_ms": 0},
+            }
+        )
+        self.assertIsInstance(tool_msg, ToolMessage)
+        self.assertEqual(tool_msg.status, "error")
+        self.assertTrue(str(tool_msg.content).startswith("[Error]"))
+
+    async def test_verify_selectors_isolates_partial_errors_and_press_action(self):
+        verified = await navigator.verify_selectors.ainvoke(
+            {
+                "selectors_json": json.dumps(
+                    {
+                        "items": ".item::text",
+                        "empty_attr": "a::attr()",
+                        "bad_numeric_id": "button#125796",
+                    }
+                ),
+                "wait_ms": 0,
+            }
+        )
+        self.assertIn("[✅ OK] items (.item::text)", verified)
+        self.assertIn("item-1", verified)
+        self.assertIn("[Error] empty_attr", verified)
+        self.assertIn("[Error] bad_numeric_id", verified)
+        self.assertIn('[id="123"]', verified)
+
+        interacted = await navigator.interact_page.ainvoke(
+            {
+                "actions_json": json.dumps(
+                    [
+                        {"action": "fill", "selector": "#term", "value": "laptop"},
+                        {"action": "press", "selector": "#term", "value": "Enter"},
+                        {"action": "scroll", "direction": "bottom", "amount": None},
+                        {"action": "scroll", "direction": "sideways"},
+                    ]
+                ),
+                "wait_ms": 0,
+            }
+        )
+        self.assertIn("fill '#term' = 'laptop' 성공", interacted)
+        self.assertIn("press '#term' key='Enter' 성공", interacted)
+        self.assertIn("scroll bottom (페이지 끝) 성공", interacted)
+        self.assertIn("지원하지 않는 direction='sideways'", interacted)
+        self.assertIn("⚠️ [부분 실패]", interacted)
+
+        all_fail = await navigator.interact_page.ainvoke(
+            {
+                "actions_json": json.dumps(
+                    [{"action": "click", "selector": "button#125796"}]
+                ),
+                "wait_ms": 0,
+            }
+        )
+        self.assertTrue(all_fail.startswith("[Error]"))
+        self.assertIn('[id="123"]', all_fail)
+
+        tool_msg = await navigator.interact_page.ainvoke(
+            {
+                "type": "tool_call",
+                "id": "call_all_fail",
+                "name": navigator.interact_page.name,
+                "args": {
+                    "actions_json": json.dumps(
+                        [{"action": "click", "selector": "button#125796"}]
+                    ),
+                    "wait_ms": 0,
+                },
+            }
+        )
+        self.assertIsInstance(tool_msg, ToolMessage)
+        self.assertEqual(tool_msg.status, "error")
+        self.assertTrue(str(tool_msg.content).startswith("[Error]"))
+
+
+class NavigatorSpecAndUnitTests(unittest.TestCase):
+    """브라우저 실행 없이 ACI·LangChain Tool 스펙과 헬퍼 함수를 검증합니다."""
+
+    def test_all_navigator_tools_follow_langchain_aci_spec(self):
+        tools = [
+            navigator.extract_dom_skeleton,
+            navigator.get_page_section,
+            navigator.verify_selectors,
+            navigator.interact_page,
+            navigator.take_screenshot,
+            navigator.browse_web,
+        ]
+        for tool_obj in tools:
+            self.assertTrue(tool_obj.handle_tool_error, f"{tool_obj.name} handle_tool_error")
+            self.assertTrue(
+                callable(tool_obj.handle_validation_error),
+                f"{tool_obj.name} handle_validation_error",
+            )
+            desc = tool_obj.description or ""
+            self.assertNotIn("Args:", desc, f"{tool_obj.name} duplicated Args:")
+            self.assertNotIn("Returns:", desc, f"{tool_obj.name} duplicated Returns:")
+            self.assertFalse(
+                desc.startswith((" ", "\t", "\n")),
+                f"{tool_obj.name} description has leading whitespace",
+            )
+
+    def test_tool_call_validation_error_uses_formatted_error_status(self):
+        msg = asyncio.run(
+            navigator.browse_web.ainvoke(
+                {
+                    "type": "tool_call",
+                    "id": "call_val_err",
+                    "name": navigator.browse_web.name,
+                    "args": {"max_steps": "not-an-int"},
+                }
+            )
+        )
+        self.assertIsInstance(msg, ToolMessage)
+        self.assertEqual(msg.status, "error")
+        self.assertTrue(str(msg.content).startswith("[Error]"))
+
+    def test_detect_error_page_distinguishes_normal_long_pages_from_http_errors(self):
+        long_normal_page = (
+            "게이밍 노트북 추천 목록 404건, error 없이 정상 비교 가능. " * 60
+        )
+        self.assertGreaterEqual(len(long_normal_page), 1500)
+        self.assertIsNone(
+            navigator._detect_error_page(long_normal_page, page_title="다나와 노트북 가격비교")
+        )
+
+        long_tech_article = (
+            "Troubleshooting HTTP status codes and server configuration in nginx. " * 35
+        )
+        self.assertGreaterEqual(len(long_tech_article), 1500)
+        self.assertIsNone(
+            navigator._detect_error_page(
+                long_tech_article, page_title="How to fix 403 Forbidden error"
+            )
+        )
+        warning = navigator._detect_title_error_warning(
+            long_tech_article, page_title="How to fix 403 Forbidden error"
+        )
+        self.assertIn("⚠️", warning)
+
+        short_recaptcha_footer = "회원가입 및 로그인 페이지입니다. Google reCAPTCHA 개인정보 보호정책 및 이용약관이 적용됩니다."
+        self.assertIsNone(
+            navigator._detect_error_page(short_recaptcha_footer, page_title="로그인")
+        )
+
+        short_antibot = navigator._detect_error_page(
+            "Verify you are human before continuing to this site.",
+            page_title="Just a moment...",
+        )
+        self.assertIsNotNone(short_antibot)
+        self.assertTrue(str(short_antibot).startswith("[Error]"))
+        self.assertIn("중단", str(short_antibot))
+
+        short_error = navigator._detect_error_page(
+            "404 Not Found - The requested page could not be found.",
+            page_title="404 Not Found",
+        )
+        self.assertIsNotNone(short_error)
+        self.assertTrue(str(short_error).startswith("[Error]"))
+
+    def test_selector_error_hint_covers_common_syntax_pitfalls(self):
+        dummy_exc = ValueError("invalid selector")
+        hint_num = navigator._selector_error_hint("button#125796", dummy_exc)
+        self.assertIn('[id="123"]', hint_num)
+
+        hint_contains = navigator._selector_error_hint("div:contains('RAM')", dummy_exc)
+        self.assertIn(":has-text", hint_contains)
+
+        hint_tw = navigator._selector_error_hint(".pb-[50px]", dummy_exc)
+        self.assertIn("Tailwind", hint_tw)
+        self.assertIn("\\\\[", hint_tw)
+
+        hint_xpath = navigator._selector_error_hint("//div[@class='price']/text()", dummy_exc)
+        self.assertIn("CSS", hint_xpath)
+        self.assertIn("::attr(", hint_xpath)
