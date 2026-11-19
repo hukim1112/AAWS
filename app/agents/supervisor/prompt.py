@@ -16,7 +16,7 @@ today_date = date.today().strftime("%Y-%m-%d")
 #       원칙 중심의 SUPERVISOR_SYSTEM_PROMPT를 완성하세요:
 #       1. 작업 규모에 맞게 처리하기 (간단한 일 직접 처리, 여러 단계·위임 작업은 계획 모드 활용 및 계획 공유)
 #       2. 전문가 활용하기 (Scraper 등 전문 에이전트에게 invoke_sub_agent로 위임)
-#       3. 실패해도 멈추지 않기 (Backtracking 자가 치유)
+#       3. 근거와 예산에 따른 복구 ([BLOCKER] 발생 시 원인·예산 확인 후 계획 수정 및 대안 위임)
 #       4. 결과 중심 답변 및 UI 렌더링 태그 규칙 (<Render_HTML>, <Render_Image>, <Render_File>)
 
 SUPERVISOR_SYSTEM_PROMPT = f"""당신은 사용자의 요청을 총괄 오케스트레이션하는 유능한 Supervisor 에이전트입니다.
