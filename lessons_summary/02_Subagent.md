@@ -210,18 +210,23 @@ Supervisor가 Scraper를 여러 번 호출하는 시나리오:
 
 2차 호출에서 "아까 수집한 데이터"를 Scraper가 기억하려면 **동일 세션**이어야 합니다. 하지만 Supervisor와 같은 세션을 쓰면 독립적인 메시지 히스토리를 유지할 수 없습니다.
 
-### 해법: `supervisor_tid + "_" + role` 네이밍 컨벤션
+### 해법: 고유 `sub_thread_id` 발급(격리) 및 재전달(연속성)
 
 ```python
-# 2. Sub-agent 전용 세션 ID 구성 (연속성 보장)
-sub_thread_id = f"{supervisor_tid}_{subagent_role}"
+# 2. Sub-agent 전용 세션 ID 구성 (기본: 호출별 UUID 격리, 연속 작업: sub_thread_id 재전달)
+resolved_sub_tid = (
+    sub_thread_id.strip()
+    if sub_thread_id and sub_thread_id.strip()
+    else f"{supervisor_tid}_{subagent_role}_{uuid.uuid4().hex[:8]}"
+)
 ```
 
 예시:
 ```
-Supervisor thread_id : "session_abc123"
-Scraper  thread_id   : "session_abc123_scraper"   ← 독립 세션, 연속성 보장
-Analyst  thread_id   : "session_abc123_analyst"   ← 독립 세션, 연속성 보장
+Supervisor thread_id  : "session_abc123"
+Scraper (병렬 작업 A) : "session_abc123_scraper_a1b2c3d4"  ← 독립 세션, 동시 호출 메모리 격리
+Scraper (후속 작업 A2): sub_thread_id="session_abc123_scraper_a1b2c3d4"  ← 동일 세션 재사용, 기억 연속성 보장
+Analyst  thread_id    : "session_abc123_analyst_e5f60718"  ← 독립 세션
 ```
 
 ### ToolRuntime으로 thread_id 자동 추출
@@ -254,7 +259,7 @@ runtime.state                       # 현재 그래프 상태
 runtime.tool_call_id
 ```
 
-> **핵심 교훈**: Sub-agent의 thread_id는 `{supervisor_tid}_{role}` 패턴으로 구성하라. 독립적인 메시지 히스토리를 유지하면서 세션 연속성을 확보할 수 있다. thread_id는 ToolRuntime.execution_info.thread_id로 도구 내부에서 안전하게 추출한다.
+> **핵심 교훈**: Sub-agent의 thread_id는 기본 `{supervisor_tid}_{role}_{uuid8}` 패턴으로 고유 발급해 병렬 호출 간 메모리를 격리하고, 동일 작업을 이어갈 때는 반환된 `sub_thread_id`를 재전달하여 세션 연속성을 확보하라. `thread_id`는 `ToolRuntime.execution_info.thread_id`로 도구 내부에서 안전하게 추출한다.
 
 ---
 
@@ -420,15 +425,15 @@ invoke_sub_agent 반환값 분기:
 ### Backtracking 시나리오 예시
 
 ```
-1차 시도: invoke_sub_agent("quotes.toscrape.com 수집", role="scraper")
+1차 시도: invoke_sub_agent(task_instruction="quotes.toscrape.com 수집", subagent_role="scraper")
    → [BLOCKER: 사이트 접근 차단 (403 Forbidden)]
 
 Supervisor:
    → task_update(task_id=1, status="BLOCKED")
    → enter_plan(intent="revise", goal="차단 우회 대안 데이터 소스 전환")
    → exit_plan(plan_name="대안 수집 계획", steps=["books.toscrape.com 수집 및 보고"])
-   → task_create(title="대안 수집", description="books.toscrape.com으로 전환")
-   → invoke_sub_agent("books.toscrape.com 수집", role="scraper")
+   → task_create(task_description="books.toscrape.com으로 전환하여 대안 데이터 수집")
+   → invoke_sub_agent(task_instruction="books.toscrape.com 수집", subagent_role="scraper")
    → [TASK REPORT] Status: SUCCESS ✅
 ```
 
@@ -629,8 +634,8 @@ def fibonacci(n: int) -> int:
 4. **단순한 페이지네이션 구조**
    - 하단 다음 페이지 링크가 `li.next a` 형태로 되어 있으며, URL 패턴이 `/page/2/`, `/page/3/` 형태로 직관적이어서 다중 페이지 확장 시 루프 처리가 매우 간단합니다.
 
-> 🔍 **분석**: Test 5에서 Scraper가 진행했던 실제 파싱 셀렉터와 사이드바 충돌 주의점 등을 `test_session_supervisor_v2_scraper` 세션에서 정확히 회상.
-> `{supervisor_tid}_{role}` 세션 네이밍 컨벤션으로 독립성과 연속성이 안정적으로 유지됨을 확인.
+> 🔍 **분석**: Test 5에서 Scraper가 진행했던 실제 파싱 셀렉터와 사이드바 충돌 주의점 등을 반환된 `sub_thread_id`(`{supervisor_tid}_{role}_{uuid8}`) 세션 재전달을 통해 정확히 회상.
+> 호출별 고유 `sub_thread_id` 발급으로 독립성과 세션 재전달을 통한 연속성이 안정적으로 유지됨을 확인.
 
 ---
 
