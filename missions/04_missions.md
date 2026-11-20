@@ -138,7 +138,8 @@ SUPERVISOR_SYSTEM_PROMPT = f"""당신은 사용자의 모든 요청을 편안하
 
 from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update
 from app.tools.common import (
-    file_read, file_writer, file_edit, glob_search, grep_search, web_search
+    file_read, file_writer, file_edit, bash_command,
+    glob_search, grep_search, web_search, web_fetch,
 )
 
 # ── 1. 프로덕션 Long-Running 도구 모듈 임포트 ──
@@ -148,7 +149,7 @@ from app.tools.supervisor_tools import (
     get_sub_agent_job_status
 )
 
-# ── 2. Supervisor 전체 도구 바인딩 목록 (14종) ──
+# ── 2. Supervisor 전체 도구 바인딩 목록 (16종) ──
 tools_supervisor = [
     # Planning & Task Board (5종)
     enter_plan, exit_plan, task_create, task_list, task_update,
@@ -156,8 +157,9 @@ tools_supervisor = [
     # Sub-Agent Orchestration (3종)
     list_sub_agents, invoke_sub_agent, get_sub_agent_job_status,
     
-    # Common File / Search Tools (6종)
-    file_read, file_writer, file_edit, glob_search, grep_search, web_search,
+    # Common Tools (8종)
+    file_read, file_writer, file_edit, bash_command,
+    glob_search, grep_search, web_search, web_fetch,
 ]
 
 __all__ = ["tools_supervisor"]

@@ -11,7 +11,10 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
 from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update, check_plan_mode_tool_allowed
-from app.tools.common import file_read, file_writer, glob_search, grep_search, file_edit, web_search
+from app.tools.common import (
+    file_read, file_writer, file_edit, bash_command,
+    glob_search, grep_search, web_search, web_fetch,
+)
 from app.agents.scraper import create_agent_executor as create_scraper_executor
 
 # =============================================================================
@@ -38,7 +41,8 @@ from app.agents.scraper import create_agent_executor as create_scraper_executor
 tools_supervisor = [
     # Planning & Task Board (5종)
     enter_plan, exit_plan, task_create, task_list, task_update,
-    # 공용 파일/검색 도구 (6종)
-    file_read, file_writer, file_edit, glob_search, grep_search, web_search,
+    # 범용 도구 (8종)
+    file_read, file_writer, file_edit, bash_command,
+    glob_search, grep_search, web_search, web_fetch,
     # TODO: invoke_sub_agent,
 ]
