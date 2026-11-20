@@ -15,7 +15,7 @@
   - `__init__.py`: `AGENT_METADATA` 및 `create_agent_executor` 노출
 * **하위 전문 에이전트 / 도구**: `app/agents/scraper/` / `app/tools`
 * **계획 및 태스크 도구**: `app/tools/plan.py` (`enter_plan`, `exit_plan`, `task_create`, `task_list`, `task_update`)
-* **공용 파일 도구**: `app/tools/common.py`
+* **범용 도구 (8종)**: `app/tools/common.py`
 
 ---
 
@@ -74,7 +74,10 @@ from langchain_core.messages import HumanMessage
 
 from app.utils import normalize_content
 from app.tools.plan import enter_plan, exit_plan, task_create, task_list, task_update, check_plan_mode_tool_allowed
-from app.tools.common import file_read, file_writer, glob_search, grep_search, file_edit, web_search
+from app.tools.common import (
+    file_read, file_writer, file_edit, bash_command,
+    glob_search, grep_search, web_search, web_fetch,
+)
 from app.agents.scraper import create_agent_executor as create_scraper_executor
 
 # =============================================================================
@@ -154,8 +157,9 @@ tools_supervisor = [
     enter_plan, exit_plan, task_create, task_list, task_update,
     # Sub-Agent Invocation (1종)
     invoke_sub_agent,
-    # Common File / Search Tools (6종)
-    file_read, file_writer, file_edit, glob_search, grep_search, web_search,
+    # Common Tools (8종)
+    file_read, file_writer, file_edit, bash_command,
+    glob_search, grep_search, web_search, web_fetch,
 ]
 ```
 

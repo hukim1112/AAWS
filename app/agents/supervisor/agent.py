@@ -9,7 +9,7 @@ Analyst 등)에게 작업을 위임하여 복잡한 멀티스텝 미션을 완�
   app/agents/supervisor/
    ├── agent.py      (에이전트 조립 및 팩토리)
    ├── prompt.py     (SUPERVISOR_SYSTEM_PROMPT 및 위임/보고 원칙)
-   └── tools.py      (계획 5종 + 오케스트레이션 3종 + 공통 6종 도구 바인딩)
+   └── tools.py      (계획 5종 + 오케스트레이션 3종 + 범용 8종 도구 바인딩)
 ===============================================================================
 """
 
@@ -50,7 +50,7 @@ async def create_agent_executor(checkpointer=None):
         await checkpointer.setup()
 
     # 3. Supervisor 에이전트 구축
-    #    tools_supervisor = Planning(5) + Orchestration(3) + Common(6) = 14종
+    #    tools_supervisor = Planning(5) + Orchestration(3) + Common(8) = 16종
     supervisor_agent = create_agent(
         model=llm,
         tools=tools_supervisor,

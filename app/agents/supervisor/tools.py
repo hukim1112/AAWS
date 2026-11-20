@@ -1,8 +1,8 @@
 """
 ===============================================================================
-[AAWS Tools] Supervisor — 오케스트레이션 및 계획 도구 14종 통합 바인딩
+[AAWS Tools] Supervisor — 오케스트레이션 및 계획 도구 16종 통합 바인딩
 ===============================================================================
-Planning(계획 및 태스크 5종) + Orchestration(서브에이전트 위임 3종) + Common(공통 6종) = 14종
+Planning(계획 및 태스크 5종) + Orchestration(서브에이전트 위임 3종) + Common(범용 8종) = 16종
 ===============================================================================
 """
 
@@ -25,12 +25,14 @@ from app.tools.common import (
     file_read,
     file_writer,
     file_edit,
+    bash_command,
     grep_search,
     glob_search,
     web_search,
+    web_fetch,
 )
 
-# 👑 Supervisor용 도구 바인딩: 계획(5종) + 오케스트레이션(3종) + 범용(6종) = 14종
+# 👑 Supervisor용 도구 바인딩: 계획(5종) + 오케스트레이션(3종) + 범용(8종) = 16종
 tools_supervisor = [
     # 1. Planning & Task Board (5종)
     enter_plan,
@@ -42,13 +44,15 @@ tools_supervisor = [
     list_sub_agents,
     invoke_sub_agent,
     get_sub_agent_job_status,
-    # 3. Common File & Search (6종)
+    # 3. Common Tools (8종)
     file_read,
     file_writer,
     file_edit,
+    bash_command,
     grep_search,
     glob_search,
     web_search,
+    web_fetch,
 ]
 
 __all__ = [
