@@ -132,15 +132,13 @@ async def create_agent_executor(checkpointer=None):
 
     # 3. 범용 9대 도구 + 커스텀 기억 도구 2종이 탑재된 스마트 챗봇 에이전트 구축
     active_tools = tools_chatbot + [read_user_memory, update_user_memory]
-    chatbot_agent = create_agent(
+    return create_agent(
         model=llm,
         tools=active_tools,
         system_prompt=CHATBOT_SYSTEM_PROMPT,
         checkpointer=checkpointer,
         context_schema=AgentContext,
     )
-    chatbot_agent.checkpointer_conn = conn
-    return chatbot_agent
 ```
 
 ---

@@ -9,9 +9,9 @@
 
 1. [Long-Running 패턴이 필요한 이유 — Sync-over-HTTP의 한계](#1-long-running-패턴이-필요한-이유--sync-over-http의-한계)
 2. [전체 아키텍처 시퀀스 다이어그램 — Event-Driven Reactive Wakeup](#2-전체-아키텍처-시퀀스-다이어그램--event-driven-reactive-wakeup)
-3. [FastAPI BackgroundTasks & Job Store 설계 — `server.py`](#3-fastapi-backgroundtasks--job-store-설계--serverpy)
-4. [Reactive Agent Wakeup — 서브에이전트 완료 시 Supervisor 자동 재개](#4-reactive-agent-wakeup--서브에이전트-완료-시-supervisor-자동-재개)
-5. [통합 확장형 도구 인터페이스 — `invoke_sub_agent` & `get_sub_agent_job_status`](#5-통합-확장형-도구-인터페이스--invoke_sub_agent--get_sub_agent_job_status)
+3. [FastAPI Task Registry & Job Store 설계 — `server.py`](#3-fastapi-task-registry--job-store-설계--serverpy)
+4. [Reactive Agent Wakeup — 서브에이전트 완료/실패 시 Supervisor 자동 재개](#4-reactive-agent-wakeup--서브에이전트-완료실패-시-supervisor-자동-재개)
+5. [통합 확장형 도구 인터페이스 — `invoke_sub_agent`, `get_sub_agent_job_status` & `cancel_sub_agent_job`](#5-통합-확장형-도구-인터페이스--invoke_sub_agent-get_sub_agent_job_status--cancel_sub_agent_job)
 6. [시스템 프롬프트 위임 원칙 — 언제 백그라운드로 보낼 것인가?](#6-시스템-프롬프트-위임-원칙--언제-백그라운드로-보낼-것인가)
 7. [부록: 4대 핵심 시나리오 실험 검증 Walkthrough](#7-부록-4대-핵심-시나리오-실험-검증-walkthrough)
 
@@ -79,7 +79,7 @@ sequenceDiagram
 
 ---
 
-## 3. FastAPI BackgroundTasks & Job Store 설계 — `server.py`
+## 3. FastAPI Task Registry & Job Store 설계 — `server.py`
 
 ### Job 데이터 모델 및 인메모리 스토어
 
@@ -87,153 +87,33 @@ sequenceDiagram
 class JobSubmitInput(BaseModel):
     message: str
     thread_id: Optional[str] = None
+    parent_thread_id: Optional[str] = None
     callback_agent: Optional[str] = "supervisor"
     callback_thread_id: Optional[str] = None
+    user_id: Optional[str] = None
 
-# --- In-Memory Job Store ---
+# --- In-Memory Job Store & Task Registry ---
 job_store: Dict[str, dict] = {}
+job_tasks: Dict[str, asyncio.Task] = {}
+MAX_CONSECUTIVE_FAILED_WAKEUPS = 3
 ```
 
-### Job 제출 엔드포인트 (`POST /agents/{agent_name}/jobs`)
+### Job 제출 · 취소 · 조회 엔드포인트
 
-FastAPI의 `BackgroundTasks`를 활용하여 요청 핸들러는 즉시 200 OK를 반환하고, 실제 작업은 백그라운드 이벤트 루프에서 실행합니다:
-
-```python
-@app.post("/agents/{agent_name}/jobs")
-async def submit_agent_job(
-    agent_name: str,
-    input_data: JobSubmitInput,
-    background_tasks: BackgroundTasks,
-    request: Request
-):
-    """비동기 백그라운드 작업을 등록하고 job_id를 즉시 반환합니다."""
-    available = [a["name"] for a in api_list_agents() if isinstance(a, dict)]
-    if agent_name not in available:
-        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found.")
-
-    # 요청 시점에 세션 컨텍스트(user_id, 부모 세션, 워크스페이스)를 미리 해석해 워커에 전달
-    effective_parent_tid = input_data.parent_thread_id or input_data.callback_thread_id
-    context_obj, config = await _resolve_run(
-        agent_name, input_data.thread_id, user_id=input_data.user_id,
-        parent_thread_id=effective_parent_tid, force_disable_hitl=True,
-    )
-
-    job_id = f"job_{uuid.uuid4().hex[:8]}"
-    created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    job_store[job_id] = {
-        "job_id": job_id,
-        "agent_name": agent_name,
-        "status": "SUBMITTED",
-        "created_at": created_at,
-        "completed_at": None,
-        "result": None,
-        "error": None,
-        "supervisor_response": None,
-        "callback_agent": input_data.callback_agent,
-        "callback_thread_id": input_data.callback_thread_id,
-    }
-
-    # 백그라운드 코루틴 등록
-    background_tasks.add_task(_run_agent_job, job_id, agent_name, input_data, context_obj, config, request.app)
-    return {"job_id": job_id, "status": "SUBMITTED", "agent_name": agent_name}
-```
-
-### Job 조회 엔드포인트 (`GET /jobs/{job_id}` & `GET /sessions/{thread_id}/jobs`)
-
-단건 작업 조회와 세션 단위 전체 작업 조회를 제공하여, Supervisor 도구 및 UI 모니터링이 단일 진실 소스(Single Source of Truth)로부터 상태를 조회할 수 있게 합니다:
-
-```python
-@app.get("/jobs/{job_id}")
-async def get_job_status(job_id: str):
-    """특정 작업의 진행 상태와 결과(및 Supervisor 후속 보고서)를 조회합니다."""
-    job = job_store.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-    return job
-
-@app.get("/sessions/{thread_id}/jobs")
-async def list_session_jobs(thread_id: str):
-    """특정 세션(thread)에 연관된 모든 백그라운드 작업 목록을 반환합니다.
-    UI에서 연쇄적으로 생성된 백그라운드 작업까지 한 번에 모니터링할 때 사용됩니다."""
-    return [
-        job for job in job_store.values()
-        if job.get("callback_thread_id") == thread_id
-    ]
-```
+- **`POST /agents/{agent_name}/jobs`**: `asyncio.create_task()`로 실행 태스크를 `job_tasks`에 추적 등록하고 `job_id`와 `sub_thread_id`를 즉시 반환합니다. (`CANCELLED`된 `sub_thread_id` 재사용 요청은 `409 Conflict`로 차단)
+- **`POST /jobs/{job_id}/cancel`**: 실행·대기 중인 태스크를 즉시 취소하고 `PlaywrightManager.close_session_tabs(sub_thread_id)`로 브라우저 탭을 정리하며 Wakeup(`wakeup_status="SKIPPED"`)을 억제합니다. (`caller_thread_id` 불일치 시 `403 Forbidden`)
+- **`GET /jobs/{job_id}` & `GET /sessions/{thread_id}/jobs`**: `AgentLogTracer.get_session_snapshot()`을 결합해 실시간 LLM/도구 실행 현황(`progress`, `progress_report`)을 반환합니다. 목록 조회는 활성 Job에만 인메모리 스냅샷을 결합해 디스크 I/O를 방지하고, 단건 상세 조회만 디스크 로그 폴백을 허용합니다.
 
 ---
 
-## 4. Reactive Agent Wakeup — 서브에이전트 완료 시 Supervisor 자동 재개
+## 4. Reactive Agent Wakeup — 서브에이전트 완료/실패 시 Supervisor 자동 재개
 
-### 백그라운드 워커 내부 구현 (`_run_agent_job`)
+### 백그라운드 워커 내부 구현 (`_run_agent_job` & `_trigger_reactive_wakeup`)
 
-서브에이전트가 작업을 마친 직후, 서버가 `callback_agent`(`supervisor`)를 직접 호출하여 후속 작업을 트리거합니다:
-
-```python
-async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInput,
-                              context_obj: AgentContext, config: dict, app: FastAPI):
-    job = job_store.get(job_id)
-    if not job:
-        return
-    job["status"] = "RUNNING"
-
-    try:
-        # 1. 서브에이전트 로드 및 실행 (세션별 plan 스코프 + 동일 thread 직렬화)
-        agent_executor = await get_or_load_agent(agent_name, app)
-
-        async def _execute_subagent() -> str:
-            with plan_session_scope(input_data.thread_id, user_id=context_obj.user_id,
-                                    parent_session_id=context_obj.parent_session_id):
-                result = await agent_executor.ainvoke(
-                    {"messages": [("user", input_data.message)]},
-                    config=config,
-                    context=context_obj,
-                )
-            return sanitize_text(normalize_content(result["messages"][-1].content))
-
-        async with acquire_thread_slot(input_data.thread_id):   # 같은 thread 동시 실행 방지
-            task_report = await _execute_subagent()
-
-        job["status"] = "SUCCESS"
-        job["completed_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        job["result"] = task_report
-
-        # 2. 🌟 Reactive Agent Wakeup: 서브에이전트 완료 즉시 Supervisor 자동 호출
-        if input_data.callback_agent:
-            cb_agent = input_data.callback_agent
-            cb_thread_id = input_data.callback_thread_id or f"session_{job_id}"
-            cb_executor = await get_or_load_agent(cb_agent, app)
-
-            # Supervisor에게 주입할 시스템 완료 통보 프롬프트
-            trigger_prompt = (
-                f"[SYSTEM NOTIFICATION: BACKGROUND TASK COMPLETED]\n"
-                f"- Job ID: {job_id}\n"
-                f"- Sub-Agent: {agent_name}\n"
-                f"- Sub-Thread ID: {input_data.thread_id} (use sub_thread_id='{input_data.thread_id}' to continue this agent)\n"
-                f"- Report Content:\n{task_report}\n\n"
-                f"[INSTRUCTION FOR SUPERVISOR]\n"
-                f"위 서브에이전트의 완료 보고서와 생성된 산출물을 바탕으로 다음 작업을 수행하거나 유저에게 답변합니다 ..."
-            )
-
-            cb_context_obj, cb_config = await _resolve_run(
-                cb_agent, cb_thread_id, user_id=context_obj.user_id, force_disable_hitl=True
-            )
-            # 사용자가 같은 세션에서 대화 중이면 그 턴이 끝날 때까지 대기 (thread lock 공유)
-            async with acquire_thread_slot(cb_thread_id):
-                with plan_session_scope(cb_thread_id, user_id=cb_context_obj.user_id):
-                    # ainvoke 한 번으로 trigger 메시지 + Supervisor 응답이 checkpoints.db에 함께 저장됨
-                    # (별도 chat 메시지 테이블에 이중 기록(add_message)하지 않음 — checkpointer가 단일 진실 공급원)
-                    sup_result = await cb_executor.ainvoke(
-                        {"messages": [("user", trigger_prompt)]},
-                        config=cb_config,
-                        context=cb_context_obj,
-                    )
-                job["supervisor_response"] = sanitize_text(normalize_content(sup_result["messages"][-1].content))
-
-    except Exception as e:
-        job["status"] = "FAILED"
-        job["error"] = str(e)
-```
+서브에이전트가 작업을 성공(`SUCCESS`)하거나 예외로 실패(`FAILED`)한 직후, 서버가 `callback_agent`(`supervisor`)를 자동으로 깨워 후속 조치를 트리거합니다:
+- **`SUCCESS` Wakeup**: `[TASK REPORT]`와 산출물 경로를 전달해 최종 보고서 작성·후속 위임을 수행하고 `wakeup_status="COMPLETED"`를 기록합니다.
+- **`FAILED` Wakeup**: 오류 상세와 `AgentLogTracer` 실행 텔레메트리를 함께 전달하며, 동일 서브에이전트의 연속 실패가 `MAX_CONSECUTIVE_FAILED_WAKEUPS`(3회)를 초과하면 무한 재귀 루프를 막기 위해 Wakeup을 억제합니다.
+- **`CANCELLED` 억제**: 취소 요청(`cancel_requested=True`)이 발생하면 정리 중 예외가 나더라도 `FAILED`로 덮어쓰지 않고 `CANCELLED` 상태 유지, 브라우저 탭 정리 및 Wakeup 억제를 보장합니다.
 
 > 💡 **대화 이력 저장 방식**: 서버는 모든 에이전트에 공유 `AsyncSqliteSaver`(`app/database/checkpoints.db`, WAL 모드)를 주입합니다. UI가 조회하는 `/sessions/{id}/messages`도 이 체크포인트에서 직접 읽어오므로, Wakeup으로 추가된 Supervisor 응답이 별도 저장 코드 없이 채팅 이력에 그대로 나타납니다. (서버가 주입한 `[SYSTEM NOTIFICATION: ...]` 트리거 메시지는 체크포인트에는 남지만, UI 조회 시에는 자동으로 숨겨집니다.)
 
@@ -241,7 +121,7 @@ async def _run_agent_job(job_id: str, agent_name: str, input_data: JobSubmitInpu
 
 ---
 
-## 5. 통합 확장형 도구 인터페이스 — `invoke_sub_agent` & `get_sub_agent_job_status`
+## 5. 통합 확장형 도구 인터페이스 — `invoke_sub_agent`, `get_sub_agent_job_status` & `cancel_sub_agent_job`
 
 ### 도구 분리 vs 단일 도구 확장 & 세션 격리(`sub_thread_id`)
 
@@ -330,25 +210,15 @@ async def invoke_sub_agent(
     )
 ```
 
-### 상태 조회 도구 (`get_sub_agent_job_status`)
+### 상태 조회 및 중단 제어 도구 (`get_sub_agent_job_status` & `cancel_sub_agent_job`)
 
-사용자가 중간에 *"아까 시킨 작업 어떻게 됐어?"* 라고 물어볼 때 Supervisor가 능동적으로 상태를 조회할 수 있는 보조 도구입니다:
+사용자가 진행 현황을 묻거나 작업 방향을 수정해야 할 때 Supervisor가 능동적으로 상태를 조회·중단하는 도구입니다 (두 도구 모두 계획 모드 중에도 호출 허용):
 
-```python
-@tool(args_schema=GetJobStatusInput)
-async def get_sub_agent_job_status(job_id: str) -> str:
-    """Checks the progress and completion result of a background sub-agent job."""
-    client = AsyncAgentClient(base_url="http://localhost:8000", timeout=10.0)
-    job = await client.get_job(job_id)
-    status = job.get("status")
-
-    if status == "SUCCESS":
-        return f"[JOB STATUS: SUCCESS]\n- Completed At: {job.get('completed_at')}\n- Report:\n{job.get('result')}"
-    elif status == "FAILED":
-        return f"[JOB STATUS: FAILED]\n- Error: {job.get('error')}"
-    else:
-        return f"[JOB STATUS: {status}]\n- Status: Currently in progress. Please wait for completion notification."
-```
+- **`get_sub_agent_job_status(job_id: Optional[str] = None)`**:
+  - `job_id` 지정 시: 해당 작업의 상태, `AgentLogTracer` 기반 `[Live Execution Progress]`, 완료 보고서/`CANCELLED`/`FAILED` 상세 조회 (`caller_thread_id` 소유권 검증 포함)
+  - `job_id` 생략 시: 현재 세션(`GET /sessions/{thread_id}/jobs`)의 모든 백그라운드 작업 요약 및 활성 텔레메트리 목록 반환
+- **`cancel_sub_agent_job(job_id: str, reason: Optional[str] = None)`**:
+  - `POST /jobs/{job_id}/cancel`을 호출해 실행·대기 중인 백그라운드 태스크를 즉시 중단하고 브라우저 탭 정리 및 Wakeup 억제를 수행합니다. (취소된 `sub_thread_id`는 `invoke_sub_agent`에서 재사용 차단)
 
 ---
 
@@ -370,6 +240,12 @@ SUPERVISOR_SYSTEM_PROMPT = """
 
   - **`run_in_background=False` (예외)**:
     "에이전트 기능 설명해줘", "1줄 요약해줘" 같은 초경량 단순 질의에만 예외적으로 사용하세요.
+
+  - **백그라운드 작업 모니터링 & 취소 (`get_sub_agent_job_status`, `cancel_sub_agent_job`)**:
+    진행 상태가 궁금하면 `get_sub_agent_job_status(job_id)`로 실시간 단계/도구 실행 현황을 조회하세요(`job_id` 생략 시 현재 세션 전체 작업 목록 조회).
+    방향을 바꿔야 하거나 불필요해진 작업은 `cancel_sub_agent_job(job_id, reason)`으로 즉시 중단하고, 취소된 `sub_thread_id`는 재사용하지 마세요.
+
+  - **실패 자동 알림 (`FAILED` Wakeup)**: 백그라운드 작업이 실패해도 서버가 오류 상세와 실행 궤적을 포함해 자동으로 당신을 다시 호출합니다.
 """
 ```
 

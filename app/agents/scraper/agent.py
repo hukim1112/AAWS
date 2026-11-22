@@ -14,6 +14,7 @@ Navigator(사이트 분석) + Coder(코드 생성/실행) 기능을 통합한 �
 ===============================================================================
 """
 
+import json
 import os
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -21,7 +22,7 @@ from langchain.agents import create_agent
 from app.utils import init_chat_model
 from app.context import AgentContext
 
-from app.middleware import SkillCatalogMiddleware
+from app.middleware import AgentLogTracer, SkillCatalogMiddleware
 from .prompt import BASE_SCRAPER_SYSTEM_PROMPT, get_skill_prompt_builder
 from .tools import tools_scraper
 
@@ -30,6 +31,17 @@ AGENT_METADATA = {
     "description": "사이트 분석 + 크롤링 코드 생성/실행 + 데이터 수집을 수행하는 Scraper 에이전트",
     "roles": ["main", "sub"],
 }
+
+
+def _load_config(path: str, default: dict) -> dict:
+    """설정 파일을 로드합니다. 실패 시 기본값을 반환합니다."""
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return default
 
 
 async def create_agent_executor(checkpointer=None):
@@ -51,11 +63,19 @@ async def create_agent_executor(checkpointer=None):
         checkpointer = AsyncSqliteSaver(conn)
         await checkpointer.setup()
 
-    # 3. 미들웨어 구성 (SkillCatalogMiddleware: 스킬 카탈로그 동적 주입)
-    middleware = [SkillCatalogMiddleware(get_skill_prompt_builder())]
+    # 3. 미들웨어 구성 (AgentLogTracer + SkillCatalogMiddleware)
+    logging_cfg = _load_config("./configs/logging.config", {"logging_enabled": False})
+    disk_logging_enabled = bool(logging_cfg.get("logging_enabled", False))
+    log_dir = logging_cfg.get("log_dir")
+    tracer = (
+        AgentLogTracer(log_dir=log_dir, disk_enabled=disk_logging_enabled)
+        if log_dir
+        else AgentLogTracer(disk_enabled=disk_logging_enabled)
+    )
+    middleware = [tracer, SkillCatalogMiddleware(get_skill_prompt_builder())]
 
     # 4. Scraper 에이전트 구축
-    scraper_agent = create_agent(
+    return create_agent(
         model=llm,
         tools=tools_scraper,
         system_prompt=BASE_SCRAPER_SYSTEM_PROMPT,
@@ -63,5 +83,3 @@ async def create_agent_executor(checkpointer=None):
         checkpointer=checkpointer,
         context_schema=AgentContext,
     )
-    scraper_agent.checkpointer_conn = conn
-    return scraper_agent

@@ -98,15 +98,13 @@ async def create_agent_executor(checkpointer=None):
     # 에이전트에게 필요한 도구 목록 선택
     tools = [file_read, file_writer, bash_command, glob_search]
     
-    agent = create_agent(
+    return create_agent(
         model=llm,
         tools=tools,
         system_prompt=WORKER_SYSTEM_PROMPT,
         checkpointer=checkpointer,
         context_schema=AgentContext
     )
-    agent.checkpointer_conn = conn
-    return agent
 ```
 
 ---

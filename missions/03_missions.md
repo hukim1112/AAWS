@@ -251,15 +251,13 @@ async def create_agent_executor(checkpointer=None):
         await checkpointer.setup()
     
     # 3. Supervisor 에이전트 생성
-    supervisor_agent = create_agent(
+    return create_agent(
         model=llm,
         tools=tools_supervisor,
         system_prompt=SUPERVISOR_SYSTEM_PROMPT,
         checkpointer=checkpointer,
         context_schema=AgentContext
     )
-    supervisor_agent.checkpointer_conn = conn  # 서버 종료 시 정리용
-    return supervisor_agent
 ```
 
 ---
