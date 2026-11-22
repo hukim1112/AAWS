@@ -50,5 +50,4 @@ async def create_agent_executor(checkpointer=None):
         checkpointer=checkpointer,
         context_schema=AgentContext,
     )
-    chatbot_agent.checkpointer_conn = conn
     return chatbot_agent

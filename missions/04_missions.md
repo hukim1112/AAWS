@@ -14,7 +14,7 @@
 | **실행 방식** | 단일 프로세스 루프 안에서 하위 에이전트 동기 호출 (`ainvoke`) | FastAPI 백그라운드 작업 큐(`POST /jobs`)에 등록 후 `job_id` 즉시 반환 |
 | **타임아웃 문제** | 2~5분 이상 긴 작업 시 **HTTP 연결 끊김 및 브라우저 타임아웃** 발생 | **타임아웃 없음** (즉시 응답 반환 후 서버 백그라운드에서 실행) |
 | **사용자 경험 (UX)** | 하위 작업이 끝날 때까지 **채팅창 전체가 멈춤(Freezing)** | 즉시 작업 접수 확인 메시지 수신, UI 멈춤 없이 대기 |
-| **결과 수신 방식** | 동기 대기 후 반환 | 작업 완료 즉시 시스템이 부모를 깨우는 **Reactive Wakeup**으로 자동 보고 |
+| **결과 수신 방식** | 동기 대기 후 반환 | 작업 완료/실패 시 부모를 깨우는 **Reactive Wakeup (`SUCCESS` / `FAILED`)** + 실시간 진행 조회·중단 제어 |
 | **하위 에이전트 세션 관리** | 일회성 타임스탬프 스레드 (후속 지시 시 이전 단기 메모리 재사용 불가) | 호출마다 고유 `sub_thread_id` 자동 생성(동시 호출 시 메모리 완벽 격리) + 반환된 `sub_thread_id`로 재호출 시 Checkpointer 연속 작업 지원 |
 
 ---
@@ -31,7 +31,7 @@
 ---
 
 ## 📋 미션 목표
-1. **[프로덕션 도구 확인]**: `app/tools/supervisor_tools.py`에 구현된 3대 오케스트레이션 도구(`list_sub_agents`, `invoke_sub_agent`, `get_sub_agent_job_status`)의 역할을 확인합니다.
+1. **[프로덕션 도구 확인]**: `app/tools/supervisor_tools.py`에 구현된 4대 오케스트레이션 도구(`list_sub_agents`, `invoke_sub_agent`, `get_sub_agent_job_status`, `cancel_sub_agent_job`)의 역할을 확인합니다.
 2. **[비동기 위임 프롬프트 업그레이드]**: `app/agents/supervisor/prompt.py`에 백그라운드 위임 원칙(`run_in_background=True` 기본 원칙)과 UI 렌더링 태그 규칙을 탑재합니다.
 3. **[Supervisor 도구 교체]**: `app/agents/supervisor/tools.py`에서 기존 로컬 도구 대신 프로덕션 도구 모듈(`app.tools.supervisor_tools`)로 교체 바인딩합니다.
 4. **[서버 & Chat UI 가동]**: FastAPI 백엔드와 Chainlit 프론트엔드를 실행합니다.
@@ -44,7 +44,7 @@
 
 ## 🛠️ 단계별 수행 가이드
 
-### 1단계: `app/tools/supervisor_tools.py` 3대 도구 살펴보기
+### 1단계: `app/tools/supervisor_tools.py` 4대 도구 살펴보기
 
 이미 완성형으로 제공된 `app/tools/supervisor_tools.py` 파일을 열고 다음 핵심 도구들의 역할을 확인하세요:
 
@@ -53,8 +53,9 @@
    - **`run_in_background=True` 비동기 실행**: 작업을 서버 백그라운드 작업 큐에 등록하고 `[JOB SUBMITTED]`(Job ID 및 Sub-Thread ID 포함)를 즉시 반환합니다.
    - **세션 격리 및 연속 작업(`sub_thread_id`)**:
      - **기본 호출(`sub_thread_id=None`)**: 호출할 때마다 고유한 `sub_thread_id`(`{supervisor_tid}_{role}_{uuid8}`)를 자동 생성하여, 동일한 `scraper`를 동시에 여러 개 호출해도 단기 메모리(Checkpointer)가 섞이지 않고 안전하게 격리됩니다.
-     - **연속 호출(`sub_thread_id` 지정)**: 도구 반환값이나 Reactive Wakeup 알림에 포함된 `Sub-Thread ID`를 `invoke_sub_agent(..., sub_thread_id="...")`로 다시 전달하면, 해당 서브에이전트의 기존 Checkpointer 메모리를 그대로 이어받아 후속 작업이나 `[BLOCKER]` 복구를 수행할 수 있습니다.
-3. **`get_sub_agent_job_status`**: 진행 중인 특정 작업의 완료 여부, `Sub-Thread ID` 및 결과 보고서 조회 (`GET /jobs/{job_id}`)
+     - **연속 호출(`sub_thread_id` 지정)**: 도구 반환값이나 Reactive Wakeup 알림에 포함된 `Sub-Thread ID`를 `invoke_sub_agent(..., sub_thread_id="...")`로 다시 전달하면, 해당 서브에이전트의 기존 Checkpointer 메모리를 그대로 이어받아 후속 작업이나 `[BLOCKER]` 복구를 수행할 수 있습니다. (단, 취소된 `sub_thread_id` 재사용은 차단됩니다.)
+3. **`get_sub_agent_job_status`**: `job_id` 지정 시 특정 작업의 진행 상태, `AgentLogTracer` 기반 실시간 LLM/도구 텔레메트리, 결과 보고서를 조회하며(`GET /jobs/{job_id}`), `job_id`를 생략하면 현재 세션의 전체 백그라운드 작업 목록(`GET /sessions/{thread_id}/jobs`)을 반환합니다.
+4. **`cancel_sub_agent_job`**: 실행 중이거나 대기 중인 백그라운드 작업을 즉시 취소하고(`POST /jobs/{job_id}/cancel`), Playwright 브라우저 탭 정리 및 Reactive Wakeup 억제를 수행하며 취소된 `sub_thread_id`의 재사용을 막습니다. (계획 모드 중에도 호출 가능)
 
 ---
 
@@ -91,6 +92,10 @@ SUPERVISOR_SYSTEM_PROMPT = f"""당신은 사용자의 모든 요청을 편안하
   - **`run_in_background=False` (예외)**:
     "에이전트 기능 설명해줘", "1줄 요약해줘" 같은 초경량 단순 질의에만 예외적으로 사용하세요.
   - 사용 가능한 에이전트는 `list_sub_agents`로 확인하고, 상세 위임 절차는 `invoke_sub_agent` 도구의 설명을 참고하세요.
+  - **백그라운드 작업 모니터링 & 취소 (`get_sub_agent_job_status`, `cancel_sub_agent_job`)**:
+    진행 상태가 궁금하면 `get_sub_agent_job_status(job_id)`로 실시간 단계/도구 실행 현황을 조회하세요(`job_id` 생략 시 현재 세션의 전체 작업 목록 조회).
+    방향을 바꿔야 하거나 불필요해진 실행 중인 작업은 `cancel_sub_agent_job(job_id, reason)`으로 즉시 중단할 수 있습니다. 취소된 `sub_thread_id`는 재사용하지 말고 새 작업으로 시작하세요.
+  - **실패 자동 알림 (`FAILED` Wakeup)**: 백그라운드 작업이 실패해도 서버가 오류 상세와 실행 궤적을 포함해 자동으로 당신을 다시 호출합니다. 원인을 분석해 계획을 수정하거나 대안을 재위임하고, 근거 없는 동일 재시도는 피하세요.
 
 - **근거와 예산에 따른 복구**: 전문 에이전트는 회복 가능한 실패에 관련 스킬을 적용합니다.
   [BLOCKER]를 받으면 원인, 이미 시도한 전략, 보존된 상태와 남은 예산을 확인하세요.
@@ -146,16 +151,17 @@ from app.tools.common import (
 from app.tools.supervisor_tools import (
     invoke_sub_agent,
     list_sub_agents,
-    get_sub_agent_job_status
+    get_sub_agent_job_status,
+    cancel_sub_agent_job,
 )
 
-# ── 2. Supervisor 전체 도구 바인딩 목록 (16종) ──
+# ── 2. Supervisor 전체 도구 바인딩 목록 (17종) ──
 tools_supervisor = [
     # Planning & Task Board (5종)
     enter_plan, exit_plan, task_create, task_list, task_update,
     
-    # Sub-Agent Orchestration (3종)
-    list_sub_agents, invoke_sub_agent, get_sub_agent_job_status,
+    # Sub-Agent Orchestration (4종)
+    list_sub_agents, invoke_sub_agent, get_sub_agent_job_status, cancel_sub_agent_job,
     
     # Common Tools (8종)
     file_read, file_writer, file_edit, bash_command,
