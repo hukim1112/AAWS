@@ -15,11 +15,10 @@ Analyst 등)에게 작업을 위임하여 복잡한 멀티스텝 미션을 완�
 
 import json
 import os
-import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from app.middleware import AgentLogTracer
 from app.utils import init_chat_model
+from app.utils.database import get_shared_checkpointer
 from app.context import AgentContext
 
 from .prompt import SUPERVISOR_SYSTEM_PROMPT
@@ -47,20 +46,9 @@ async def create_agent_executor(checkpointer=None):
     # 1. LLM 설정
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
 
-    # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
-    conn = None
+    # 2. 공유 SQLite 체크포인터 SSOT
     if checkpointer is None:
-        db_dir = "app/database"
-        os.makedirs(db_dir, exist_ok=True)
-        checkpoints_path = os.path.join(db_dir, "checkpoints.db")
-
-        conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-
-        await conn.execute("PRAGMA journal_mode=WAL;")
-
-        await conn.execute("PRAGMA busy_timeout=5000;")
-        checkpointer = AsyncSqliteSaver(conn)
-        await checkpointer.setup()
+        checkpointer = await get_shared_checkpointer()
 
     # 3. 미들웨어 & Supervisor 에이전트 구축
     #    tools_supervisor = Planning(5) + Orchestration(4) + Common(8) = 17종
