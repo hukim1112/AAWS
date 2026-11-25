@@ -64,7 +64,6 @@
 ```python
 # app/agents/supervisor/tools.py
 
-import os
 import asyncio
 from typing import List
 from pydantic import BaseModel, Field
@@ -215,12 +214,10 @@ SUPERVISOR_SYSTEM_PROMPT = f"""당신은 사용자의 요청을 편안하게 도
 ```python
 # app/agents/supervisor/agent.py
 
-import os
-import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 
 from app.utils import init_chat_model
+from app.utils.database import get_shared_checkpointer
 from app.context import AgentContext
 from .prompt import SUPERVISOR_SYSTEM_PROMPT
 from .tools import tools_supervisor
@@ -235,20 +232,11 @@ async def create_agent_executor(checkpointer=None):
     # 1. LLM 초기화
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
     
-    # 2. AsyncSqliteSaver 체크포인터 설정
+    # 2. 공유 SQLite 체크포인터 SSOT
     #    - FastAPI 서버는 공유 checkpointer를 인자로 주입합니다 (서버 실행 시).
-    #    - 노트북/스크립트처럼 단독 실행할 때만 직접 연결을 엽니다.
-    conn = None
+    #    - 노트북/스크립트처럼 단독 실행할 때만 공유 체크포인터를 생성합니다.
     if checkpointer is None:
-        db_dir = "app/database"
-        os.makedirs(db_dir, exist_ok=True)
-        checkpoints_path = os.path.join(db_dir, "checkpoints.db")
-        
-        conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-        await conn.execute("PRAGMA journal_mode=WAL;")      # 동시 읽기/쓰기 허용
-        await conn.execute("PRAGMA busy_timeout=5000;")     # 'database is locked' 방지
-        checkpointer = AsyncSqliteSaver(conn)
-        await checkpointer.setup()
+        checkpointer = await get_shared_checkpointer()
     
     # 3. Supervisor 에이전트 생성
     return create_agent(

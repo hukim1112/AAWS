@@ -5,12 +5,10 @@ Supervisor 에이전트 인스턴스를 조립하고 반환하는 팩토리 모�
 ===============================================================================
 """
 
-import os
-import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 
 from app.utils import init_chat_model
+from app.utils.database import get_shared_checkpointer
 from app.context import AgentContext
 from .prompt import SUPERVISOR_SYSTEM_PROMPT
 from .tools import tools_supervisor
@@ -27,7 +25,7 @@ AGENT_METADATA = {
 # TODO: missions/03_missions.md [2단계]를 참고하여
 #       async def create_agent_executor(checkpointer=None) 함수를 구현하세요.
 #       1. init_chat_model(model="gemini-3.8-flash", temperature=0.0)
-#       2. checkpointer 인자가 None일 때만 AsyncSqliteSaver 생성 (app/database/checkpoints.db, WAL + busy_timeout)
+#       2. checkpointer 인자가 None일 때만 `await get_shared_checkpointer()` 호출 (공유 AsyncSqliteSaver SSOT)
 #          ※ FastAPI 서버는 공유 checkpointer를 인자로 주입하므로 `checkpointer=None` 시그니처를 반드시 유지하세요.
 #       3. create_agent(model=llm, tools=tools_supervisor, system_prompt=SUPERVISOR_SYSTEM_PROMPT, ...)
 #       (create_agent_executor 함수가 정의되면 FastAPI 서버와 Chainlit UI에서 자동으로 감지됩니다.)

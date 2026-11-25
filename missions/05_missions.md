@@ -47,13 +47,9 @@ Supervisor 아래에 어떤 전문 영역의 에이전트를 둘 것인지는 **
 ```python
 # app/agents/custom_worker.py (예시 뼈대)
 
-import os
-import json
-import asyncio
-import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain.agents import create_agent
 from app.utils import init_chat_model
+from app.utils.database import get_shared_checkpointer
 from app.tools.common import file_read, file_writer, bash_command, glob_search
 from app.context import AgentContext
 
@@ -84,16 +80,10 @@ WORKER_SYSTEM_PROMPT = """
 async def create_agent_executor(checkpointer=None):
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
     
-    # 체크포인터: 서버가 공유 checkpointer를 주입하며, 단독 실행 시에만 직접 연결합니다.
+    # 체크포인터: 서버가 공유 checkpointer를 주입하며, 단독 실행 시에만 공유 연결을 생성합니다.
     # (체크포인터가 없으면 서브에이전트 대화가 저장되지 않아 sub_thread_id 이어서 작업하기가 불가능합니다)
-    conn = None
     if checkpointer is None:
-        os.makedirs("app/database", exist_ok=True)
-        conn = await aiosqlite.connect("app/database/checkpoints.db", check_same_thread=False)
-        await conn.execute("PRAGMA journal_mode=WAL;")
-        await conn.execute("PRAGMA busy_timeout=5000;")
-        checkpointer = AsyncSqliteSaver(conn)
-        await checkpointer.setup()
+        checkpointer = await get_shared_checkpointer()
     
     # 에이전트에게 필요한 도구 목록 선택
     tools = [file_read, file_writer, bash_command, glob_search]

@@ -1,20 +1,20 @@
 # 🎯 Mission 01: Chatbot 에이전트에 커스텀 기억 도구(읽기/갱신) 연결 및 UI 테스트
 
-본 미션은 `1_Create_agent.ipynb`에서 학습한 내용을 바탕으로, 교육생 여러분이 직접 커스텀 도구를 작성하고 예시 에이전트인 `app/agents/chatbot.py`에 연결하여 **FastAPI 서버와 Chainlit UI 환경에서 실시간으로 테스트**하는 실습 과제입니다.
+본 미션은 `1_Create_agent.ipynb`에서 학습한 내용을 바탕으로, 교육생 여러분이 직접 커스텀 도구를 작성하고 예시 에이전트인 `app/agents/chatbot/` 패키지(`agent.py`, `prompt.py`)에 연결하여 **FastAPI 서버와 Chainlit UI 환경에서 실시간으로 테스트**하는 실습 과제입니다.
 
 ---
 
 ## 📂 실습 대상 파일
 * **커스텀 도구 작성 파일 (빈 파일 제공)**: `app/tools/custom_tools.py`  
   👉 **이 빈 파일을 열고 직접 도구 코드를 작성하세요!**
-* **에이전트 조립 파일**: `app/agents/chatbot.py`
+* **에이전트 조립 패키지**: `app/agents/chatbot/` (`agent.py`, `prompt.py`)
 * **사용자 기억 데이터 파일**: `app/database/USER.md`
 
 ---
 
 ## 📋 미션 목표
 1. **[미션 1-1] 기억 읽기 도구 (`read_user_memory`) 구현**:
-   - `app/tools/custom_tools.py`에 `USER.md`를 읽는 도구를 직접 작성하고 `chatbot.py`에 탑재하여 맞춤형 첫 인사를 수행합니다.
+   - `app/tools/custom_tools.py`에 `USER.md`를 읽는 도구를 직접 작성하고 `app/agents/chatbot/agent.py`에 탑재하여 맞춤형 첫 인사를 수행합니다.
 2. **[미션 1-2] 기억 전체 갱신 도구 (`update_user_memory`) 구현**:
    - 대화 중 사용자의 취미, 연차, 전문 분야가 변경되거나 추가되면, 기존 프로필과 통합(Consolidation)하여 `USER.md` 파일을 최신 마크다운으로 덮어써서 갱신(Update)하는 도구를 구현하고 에이전트에 연결합니다.
 3. **[서버 & UI 통합 검증]**:
@@ -68,32 +68,15 @@ def update_user_memory(content: str) -> str:
 
 ---
 
-### 2단계: `app/agents/chatbot.py`에 도구 임포트 및 행동 규칙 추가
+### 2단계: `app/agents/chatbot/`에 행동 규칙 추가 및 도구 연결하기
 
-`app/agents/chatbot.py` 파일을 열고, 방금 작성한 `custom_tools` 모듈로부터 도구들을 임포트하여 에이전트 도구 목록에 추가합니다.
-이때 기존의 귀여운 고양이 페르소나와 파일 저장 규칙을 그대로 유지하면서, 도구를 자율적으로 활용할 수 있도록 **`[행동 규칙 - 기억 관리]`** 지침을 기존 `CHATBOT_SYSTEM_PROMPT`에 추가하세요:
+1. **`app/agents/chatbot/prompt.py`** 파일을 열고, 기존의 귀여운 고양이 페르소나와 파일 저장 규칙을 그대로 유지하면서 도구를 자율적으로 활용할 수 있도록 **`[행동 규칙 - 기억 관리]`** 지침을 `CHATBOT_SYSTEM_PROMPT`에 추가합니다:
 
 ```python
-# app/agents/chatbot.py
+# app/agents/chatbot/prompt.py
 
-import os
 from datetime import date
-import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langchain.agents import create_agent
-from app.utils import init_chat_model
-from app.tools import tools_chatbot
-# 1. custom_tools에서 도구 임포트
-from app.tools.custom_tools import read_user_memory, update_user_memory
-from app.context import AgentContext
 
-AGENT_METADATA = {
-    "name": "chatbot",
-    "description": "도구 및 모니터링이 활성화된 기준완성형 챗봇 (서버/UI 테스트용)",
-    "roles": ["main"],
-}
-
-# 2. 기존 CHATBOT_SYSTEM_PROMPT에 기억 관리 행동 규칙 추가
 CHATBOT_SYSTEM_PROMPT = f"""당신은 귀엽고 친밀한 고양이 페르소나를 가진 챗봇 에이전트입니다.
 사용자의 질문에 대해 재치있고 흥미롭게 대화를 하세요. 답변은 한국어로 제공하세요.
 
@@ -108,30 +91,42 @@ CHATBOT_SYSTEM_PROMPT = f"""당신은 귀엽고 친밀한 고양이 페르소나
 오늘의 날짜 : {date.today().strftime("%Y-%m-%d")}
 """
 
+__all__ = ["CHATBOT_SYSTEM_PROMPT"]
+```
+
+2. **`app/agents/chatbot/agent.py`** 파일을 열고, 방금 작성한 `custom_tools` 모듈로부터 도구들을 임포트하여 에이전트 도구 목록에 결합합니다:
+
+```python
+# app/agents/chatbot/agent.py
+
+from langchain.agents import create_agent
+from app.utils import init_chat_model
+from app.utils.database import get_shared_checkpointer
+# 1. custom_tools에서 도구 임포트
+from app.tools.custom_tools import read_user_memory, update_user_memory
+from app.context import AgentContext
+from .prompt import CHATBOT_SYSTEM_PROMPT
+from .tools import tools_chatbot
+
+AGENT_METADATA = {
+    "name": "chatbot",
+    "description": "도구 및 모니터링이 활성화된 기준완성형 챗봇 (서버/UI 테스트용)",
+    "roles": ["main"],
+}
+
 
 async def create_agent_executor(checkpointer=None):
     # 1. 일원화된 utils의 Universal Chat Model Factory를 활용하여 Gemini 3.8 Flash 모델 초기화
     llm = init_chat_model(model="gemini-3.8-flash", temperature=0.0)
 
-    # 2. AsyncSqliteSaver 기반 체크포인터 (SQLite 영구 메모리)
+    # 2. 공유 SQLite 체크포인터 SSOT
     #    ※ FastAPI 서버(app/server.py)는 공유 checkpointer를 인자로 주입합니다.
     #       `checkpointer=None` 시그니처를 지워버리면 서버와 체크포인터 연결이 분리되니 반드시 유지하세요.
-    conn = None
     if checkpointer is None:
-        db_dir = "app/database"
-        os.makedirs(db_dir, exist_ok=True)
-        checkpoints_path = os.path.join(db_dir, "checkpoints.db")
-
-        conn = await aiosqlite.connect(checkpoints_path, check_same_thread=False)
-
-        await conn.execute("PRAGMA journal_mode=WAL;")
-
-        await conn.execute("PRAGMA busy_timeout=5000;")
-        checkpointer = AsyncSqliteSaver(conn)
-        await checkpointer.setup()
+        checkpointer = await get_shared_checkpointer()
 
     # 3. 범용 9대 도구 + 커스텀 기억 도구 2종이 탑재된 스마트 챗봇 에이전트 구축
-    active_tools = tools_chatbot + [read_user_memory, update_user_memory]
+    active_tools = list(tools_chatbot) + [read_user_memory, update_user_memory]
     return create_agent(
         model=llm,
         tools=active_tools,
@@ -187,7 +182,7 @@ chainlit run app/chainlit_ui.py --port 8080
 
 ## ✅ 성공 검증 체크리스트
 - [ ] `app/tools/custom_tools.py`에 `read_user_memory`와 `update_user_memory`를 직접 작성했는가?
-- [ ] `app/agents/chatbot.py`에서 `custom_tools`로부터 도구를 임포트하여 에이전트에 등록했는가?
+- [ ] `app/agents/chatbot/agent.py`와 `prompt.py`에 커스텀 도구 및 기억 관리 규칙을 등록했는가?
 - [ ] `update_user_memory` 호출 후 실제 `app/database/USER.md` 파일 내용이 최신 상태로 덮어써져 갱신되었는가?
 - [ ] Chainlit UI에서 읽기/갱신 도구 실행 스텝이 시각적으로 표시되는가?
 

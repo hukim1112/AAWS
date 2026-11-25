@@ -149,7 +149,7 @@ AAWS/
 │   └── 03_Long_running_agent.md           # Event-Driven Reactive Wakeup & 비동기 롱러닝 아키텍처
 ├── app/                    # 🧠 에이전트 시스템 코어 패키지
 │   ├── agents/             #   ├── 독립 패키지형 에이전트 모듈 (agent.py, prompt.py, tools.py)
-│   │   ├── chatbot.py      #   │   ├── 대화형 챗봇 (기억 도구 연동)
+│   │   ├── chatbot/        #   │   ├── 대화형 챗봇 패키지 (기억 도구 연동)
 │   │   ├── scraper/        #   │   ├── 웹 스크래퍼 패키지 (브라우저 탐색/코드작성/자가치유, 전용 skills/ 내장)
 │   │   └── supervisor/     #   │   └── 총괄 오케스트레이터 패키지 (계획 수립 & 서브에이전트 비동기 위임)
 │   ├── tools/              #   ├── 에이전트 공용 도구 모음 (common, navigator, plan, supervisor_tools, custom_tools)
@@ -159,7 +159,6 @@ AAWS/
 │   ├── utils/              #   ├── LLM 초기화, 메시지 유틸, DB 레이어
 │   ├── server.py           #   ├── FastAPI 에이전트 API 서버 (동적 에이전트 로더)
 │   ├── chainlit_ui.py      #   ├── Chainlit 채팅 프론트엔드
-│   ├── streamlit_ui.py     #   ├── Streamlit 채팅 프론트엔드 (보조/호환용)
 │   └── client.py           #   └── 터미널 테스트 CLI 클라이언트
 ├── public/                 # 🎨 프론트엔드 커스텀 UI 에셋 (HtmlDashboard.jsx)
 ├── skills/                 # 📚 공용 레퍼런스 스킬 모음 (에이전트별 도메인 스킬은 app/agents/*/skills/ 위치)
