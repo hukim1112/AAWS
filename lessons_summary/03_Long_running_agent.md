@@ -50,29 +50,33 @@ Supervisor ──[POST /jobs (Job ID 발급)]──> Server (0.1초 만에 반�
 sequenceDiagram
     autonumber
     actor User as 👤 사용자
-    participant Sup as 👑 Supervisor
-    participant API as 🚀 FastAPI Server (Job Runner)
-    participant Ana as 🔬 Analyst (백그라운드)
     participant UI as 💬 Chainlit UI
+    participant Sup as 👑 Supervisor (supervisor)
+    participant API as 🚀 FastAPI 작업 관리자 (Job Runner)
+    participant Sub as 🔬 Sub-Agent (analyst / scraper)
 
-    User->>Sup: "키보드 분석 대시보드 백그라운드로 만들어줘"
-    Sup->>API: invoke_sub_agent(run_in_background=True)
-    API-->>Sup: Job ID: job_123 발급 (0.1초)
-    Sup-->>UI: "Analyst에게 백그라운드 작업을 위임했습니다. (Job ID: job_123)" (1차 턴 종료)
+    User->>UI: "키보드 분석 대시보드 백그라운드로 만들어줘"
+    UI->>Sup: POST /agents/supervisor/stream
+    Sup->>API: invoke_sub_agent(run_in_background=True)<br/>POST /agents/analyst/jobs
+    API->>Sub: 독립 세션(sub_thread_id)으로 백그라운드 실행 시작
+    activate Sub
+    API-->>Sup: Job ID: job_123 즉시 반환 (~0.1초)
+    Sup-->>UI: "Analyst에게 백그라운드 작업을 위임했습니다 (Job ID: job_123)" (1차 턴 종료)
+    UI-->>User: 작업 시작 안내 (대기 중 다른 질문·대화 자유롭게 진행)
 
-    Note over User,UI: 사용자는 기다리는 동안 다른 질문/대화를 자유롭게 진행
+    Note over Sub: 2분 뒤... 독립 컨텍스트에서 분석 및 HTML 대시보드 생성 완료!
+    Sub-->>API: [TASK REPORT] 산출물 경로 및 완료 보고 반환
+    deactivate Sub
 
-    Note over Ana: 2분 뒤... 백그라운드 분석 및 HTML 대시보드 생성 완료!
-    Ana-->>API: [TASK REPORT] 산출물 및 완료 보고서 반환
+    API->>Sup: 완료 통보 (Reactive Wakeup)<br/>[SYSTEM NOTIFICATION: BACKGROUND TASK COMPLETED] + [TASK REPORT]
+    activate Sup
+    Note over Sup: 완료 보고서 검토 및 후속 작업 수행<br/>(결과 종합, 필요 시 추가 위임, Render_HTML 응답 구성)
+    Sup-->>API: 최종 응답(supervisor_response) 작성 및 Checkpointer/Job Store 저장
+    deactivate Sup
 
-    Note over API,Sup: 🌟 핵심: 서버가 Supervisor를 자동 실행(Wakeup)하여 결과 주입!
-    API->>Sup: [SYSTEM NOTIFICATION: SUB-AGENT COMPLETED]\nReport: [TASK REPORT]...
-    
-    Note over Sup: Supervisor가 결과를 읽고 후속 분석 및 대시보드 렌더링 수행
-    Sup-->>API: 👑 최종 보고서 작성 & job_store에 supervisor_response 기록 완료
-
-    Note over UI,API: 💡 UI 세션 모니터링: GET /sessions/{thread_id}/jobs 주기적 조회
-    API-->>UI: 🔔 "[백그라운드 작업 완료] 알림" + Supervisor 최종 보고서/대시보드 자동 렌더링!
+    UI->>API: 세션 모니터링 (GET /sessions/{thread_id}/jobs)
+    API-->>UI: 완료 상태 + Supervisor 최종 응답 전달
+    UI-->>User: 🔔 "[백그라운드 작업 완료] 알림" + 최종 보고서 및 대시보드 자동 렌더링!
 ```
 
 > **💡 UI 연동 핵심 팁**: 프론트엔드(Chainlit)는 대화 세션(`thread_id`)을 기준으로 서버의 `GET /sessions/{thread_id}/jobs` 엔드포인트를 주기적으로 확인(Session Monitoring)합니다. 이를 통해 서브에이전트가 완료되고 Supervisor의 Wakeup 응답(`supervisor_response`)이 준비되는 즉시 사용자 개입 없이 화면에 결과와 시각화 대시보드를 띄워줍니다.
