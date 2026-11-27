@@ -171,6 +171,15 @@ tools_supervisor = [
 __all__ = ["tools_supervisor"]
 ```
 
+#### 🧰 Supervisor 도구 구성 (`tools_supervisor`, 총 17종)
+이번 미션에서 `supervisor`에 바인딩하는 `tools_supervisor`([`app/agents/supervisor/tools.py`](../app/agents/supervisor/tools.py))는 아래 **3개 그룹 총 17종**으로 구성되어 있습니다.
+
+| 그룹 (모듈) | 포함 도구 | 주요 역할 |
+| :--- | :--- | :--- |
+| **서브에이전트 오케스트레이션 (4종)**<br>(`app/tools/supervisor_tools.py`) | `list_sub_agents`<br>`invoke_sub_agent`<br>`get_sub_agent_job_status`<br>`cancel_sub_agent_job` | • 위임 가능(`"sub"`) 에이전트 목록 조회<br>• 동기/백그라운드 작업 위임 및 `sub_thread_id` 세션 격리·연속 실행<br>• 백그라운드 작업 상태·실시간 텔레메트리·결과 조회 (`job_id` 생략 시 세션 전체 목록)<br>• 실행·대기 중인 작업 즉시 취소, 브라우저 탭 정리 및 Wakeup 억제 |
+| **계획 수립 & 태스크 보드 (5종)**<br>(`app/tools/plan.py`) | `enter_plan`, `exit_plan`<br>`task_create`, `task_list`, `task_update` | • 읽기 전용 계획 모드 진입 및 실행 단계 확정(`plan_state.json`)<br>• 세션별 상태 칠판(`task_state.json`)에 작업 등록·조회·완료/차단 갱신 |
+| **공통 파일·검색·셸·웹 (8종)**<br>(`app/tools/common.py`) | `file_read`, `file_writer`, `file_edit`<br>`grep_search`, `glob_search`, `bash_command`<br>`web_search`, `web_fetch` | • 파일 입출력, 코드/텍스트 탐색, 셸 명령 및 스킬 스크립트 실행, 웹 검색·페이지 수집 |
+
 > 💡 **참고**: `app/agents/supervisor/agent.py`는 이미 `prompt.py`의 `SUPERVISOR_SYSTEM_PROMPT`와 `tools.py`의 `tools_supervisor`를 참조하고 있으므로, 코드를 추가로 수정할 필요 없이 프롬프트와 도구 교체가 즉시 반영됩니다!
 
 ---
